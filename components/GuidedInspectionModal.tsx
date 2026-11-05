@@ -29,6 +29,8 @@ interface GuidedInspectionModalProps {
     vehicleModel?: string;
 }
 
+type InspectionSubStep = 'answer' | 'findingNotes' | 'photoPrompt' | 'photoNotes';
+
 export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     isOpen,
     onClose,
@@ -59,7 +61,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     const [steps, setSteps] = useState<FlatInspectionStep[]>(initialSteps);
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
-    const [subStep, setSubStep] = useState<'answer' | 'photoPrompt' | 'photoNotes'>('answer');
+    const [subStep, setSubStep] = useState<InspectionSubStep>('answer');
     const [jumpStepInput, setJumpStepInput] = useState<string>('');
 
     // Speech & Voice Navigation State
@@ -75,7 +77,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     // Refs for speech recognition and synchronization
     const recognitionRef = useRef<any>(null);
     const isManuallyStoppedRef = useRef<boolean>(false);
-    const subStepRef = useRef<'answer' | 'photoPrompt' | 'photoNotes'>('answer');
+    const subStepRef = useRef<InspectionSubStep>('answer');
     const currentStepIndexRef = useRef<number>(0);
     const stepsRef = useRef<FlatInspectionStep[]>(initialSteps);
     const lastBotUtteranceRef = useRef<string>('');
@@ -181,11 +183,14 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     // Replay current step audio
     const handleRepeatAudio = useCallback(() => {
-        if (subStepRef.current === 'answer') {
+        const activeSubStep = subStepRef.current;
+        if (activeSubStep === 'answer') {
             readCurrentStep(currentStepIndexRef.current);
-        } else if (subStepRef.current === 'photoPrompt') {
+        } else if (activeSubStep === 'findingNotes') {
+            speakText("Please describe what you observed, or say Continue.");
+        } else if (activeSubStep === 'photoPrompt') {
             speakText("Do you need a photo for this step? Say Yes or No.");
-        } else if (subStepRef.current === 'photoNotes') {
+        } else if (activeSubStep === 'photoNotes') {
             speakText("Photo flagged. Say your photo notes, or say Next when ready.");
         }
     }, [readCurrentStep, speakText]);
@@ -209,9 +214,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         setLastHeardCommand(`Marked: ${statusLabel}`);
 
-        // Prompt for photo both on screen and via voice
-        setSubStep('photoPrompt');
-        speakText(`${statusLabel} recorded. Do you need a photo for this step? Say Yes or No.`);
+        // If Attention or Urgent, prompt for notes FIRST before asking about photo
+        if (status === 'attention' || status === 'urgent') {
+            setSubStep('findingNotes');
+            speakText(`${statusLabel} recorded. Please describe what you observed, or say Continue.`);
+        } else {
+            // For OK / Pass or N/A, go directly to photo prompt
+            setSubStep('photoPrompt');
+            speakText(`${statusLabel} recorded. Do you need a photo for this step? Say Yes or No.`);
+        }
     }, [syncToParent, speakText]);
 
     // Advance to next step
@@ -239,6 +250,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         setSteps(updated);
         syncToParent(updated);
     }, [syncToParent]);
+
+    // Finding notes submitted (after attention/urgent), then proceed to photo prompt
+    const handleFindingNotesSubmit = useCallback((notes: string) => {
+        const stepIdx = currentStepIndexRef.current;
+        const updated = [...stepsRef.current];
+        updated[stepIdx] = {
+            ...updated[stepIdx],
+            comment: notes
+        };
+        setSteps(updated);
+        syncToParent(updated);
+
+        setLastHeardCommand(`Notes recorded`);
+        // Move to photo prompt after notes are captured
+        setSubStep('photoPrompt');
+        speakText("Observation recorded. Do you need a photo for this step? Say Yes or No.");
+    }, [syncToParent, speakText]);
 
     // Photo prompt decision handler
     const handlePhotoChoice = useCallback((needPhoto: boolean) => {
@@ -353,13 +381,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             };
 
             recognition.onresult = (event: any) => {
-                let latestInterim = '';
-
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
                     const result = event.results[i];
                     const rawTranscript = result[0]?.transcript || '';
-                    latestInterim += rawTranscript;
-
                     const cleaned = normalizeSpeechText(rawTranscript);
                     setLiveTranscript(rawTranscript);
 
@@ -391,10 +415,24 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                     // Global Navigation
                     if (isNext) {
-                        lastCommandTimestampRef.current = now;
-                        setLastHeardCommand(`Heard: "Next" → Next Step`);
-                        advanceToNextStep();
-                        return;
+                        const activeSubStep = subStepRef.current;
+                        // If in findingNotes or photoNotes, treat "Next" as save & continue
+                        if (activeSubStep === 'findingNotes') {
+                            lastCommandTimestampRef.current = now;
+                            const stepIdx = currentStepIndexRef.current;
+                            handleFindingNotesSubmit(stepsRef.current[stepIdx]?.comment || '');
+                            return;
+                        } else if (activeSubStep === 'photoNotes') {
+                            lastCommandTimestampRef.current = now;
+                            const stepIdx = currentStepIndexRef.current;
+                            handlePhotoNotesSubmit(stepsRef.current[stepIdx]?.photoNotes || '');
+                            return;
+                        } else {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "Next" → Next Step`);
+                            advanceToNextStep();
+                            return;
+                        }
                     }
 
                     if (isBack) {
@@ -442,6 +480,28 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             setLastHeardCommand(`Heard: "${rawTranscript}" → N/A`);
                             handleSelectStatus('na');
                             return;
+                        }
+                    } else if (activeSubStep === 'findingNotes') {
+                        // In findingNotes: if user says done/save/continue, save notes and go to photo prompt
+                        if (/\b(done|save|finish notes|complete notes|continue|skip|proceed)\b/i.test(cleaned)) {
+                            lastCommandTimestampRef.current = now;
+                            const stepIdx = currentStepIndexRef.current;
+                            handleFindingNotesSubmit(stepsRef.current[stepIdx]?.comment || '');
+                            return;
+                        } else if (result.isFinal) {
+                            // Dictate observation notes
+                            const stepIdx = currentStepIndexRef.current;
+                            const existing = stepsRef.current[stepIdx]?.comment || '';
+                            const newComment = existing ? `${existing} ${rawTranscript}` : rawTranscript;
+                            setLastHeardCommand(`Dictated: "${rawTranscript}"`);
+                            
+                            const updated = [...stepsRef.current];
+                            updated[stepIdx] = {
+                                ...updated[stepIdx],
+                                comment: newComment
+                            };
+                            setSteps(updated);
+                            syncToParent(updated);
                         }
                     } else if (activeSubStep === 'photoPrompt') {
                         if (isPhotoYes) {
@@ -511,7 +571,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         } catch (err) {
             console.warn('[Speech Recognition Init Error]:', err);
         }
-    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handlePhotoChoice, handlePhotoNotesSubmit, isOpen]);
+    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handleFindingNotesSubmit, handlePhotoChoice, handlePhotoNotesSubmit, syncToParent, isOpen]);
 
     // Request Mic Permission & Start
     const handleEnableMicrophone = async () => {
@@ -685,7 +745,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     </span>
                                 ) : (
                                     <span className="truncate">
-                                        Listening... Say &ldquo;OK&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Urgent&rdquo;, or &ldquo;Next&rdquo;
+                                        {subStep === 'findingNotes' 
+                                            ? 'Listening for observations... Speak notes or say "Done"'
+                                            : subStep === 'photoPrompt'
+                                            ? 'Listening... Say "Yes" or "No" for photo'
+                                            : 'Listening... Say "OK", "Attention", "Urgent", or "Next"'}
                                     </span>
                                 )}
                             </div>
@@ -835,29 +899,111 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             </div>
                         </div>
 
-                        {/* Finding Comments with Dictation */}
-                        <div className="pt-2">
-                            <label className="text-xs font-bold text-slate-500 block mb-1">
-                                Engineer Notes / Observations:
-                            </label>
+                        {/* General Finding Notes Field */}
+                        {subStep === 'answer' && (
+                            <div className="pt-2">
+                                <label className="text-xs font-bold text-slate-500 block mb-1">
+                                    Engineer Notes / Observations:
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={currentStep.comment || ''}
+                                        onChange={e => handleCommentChange(e.target.value)}
+                                        placeholder="Add specific observations, wear levels, or defect details..."
+                                        className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    />
+                                    <SpeechToTextButton 
+                                        onTranscript={text => handleCommentChange(currentStep.comment ? `${currentStep.comment} ${text}` : text)}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Step: Finding Observation Notes Sub-Step for Attention & Urgent */}
+                    {subStep === 'findingNotes' && (
+                        <div className={`p-4 rounded-2xl border-2 space-y-3.5 animate-fade-in shadow-sm ${
+                            currentStep.status === 'urgent' 
+                                ? 'bg-red-50 border-red-300' 
+                                : 'bg-amber-50 border-amber-300'
+                        }`}>
+                            <div className="flex items-center justify-between">
+                                <div className={`flex items-center gap-2 font-black text-xs uppercase tracking-wide ${
+                                    currentStep.status === 'urgent' ? 'text-red-900' : 'text-amber-900'
+                                }`}>
+                                    {currentStep.status === 'urgent' ? (
+                                        <XCircle size={18} className="text-red-600" />
+                                    ) : (
+                                        <AlertTriangle size={18} className="text-amber-600" />
+                                    )}
+                                    <span>
+                                        {currentStep.status === 'urgent' ? 'Record Urgent Defect Notes' : 'Record Attention / Advisory Notes'}
+                                    </span>
+                                </div>
+                                <span className={`text-[11px] font-semibold italic ${
+                                    currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
+                                }`}>
+                                    (Speak notes aloud, then say &ldquo;Done&rdquo; or click below)
+                                </span>
+                            </div>
+
                             <div className="flex items-center gap-2">
                                 <input
                                     type="text"
+                                    autoFocus
                                     value={currentStep.comment || ''}
                                     onChange={e => handleCommentChange(e.target.value)}
-                                    placeholder="Add specific observations, wear levels, or defect details..."
-                                    className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    placeholder={
+                                        currentStep.status === 'urgent'
+                                            ? "Describe urgent issue (e.g. OSF brake pad metal-to-metal, severe coolant leak)..."
+                                            : "Describe condition (e.g. inner pad 3mm, slight play in ball joint)..."
+                                    }
+                                    className={`flex-1 px-3.5 py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-semibold outline-none focus:ring-2 shadow-xs ${
+                                        currentStep.status === 'urgent' 
+                                            ? 'border-red-300 focus:ring-red-500 text-red-950' 
+                                            : 'border-amber-300 focus:ring-amber-500 text-amber-950'
+                                    }`}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            handleFindingNotesSubmit(currentStep.comment || '');
+                                        }
+                                    }}
                                 />
                                 <SpeechToTextButton 
-                                    onTranscript={text => handleCommentChange(currentStep.comment ? `${currentStep.comment} ${text}` : text)}
+                                    onTranscript={text => {
+                                        const existing = currentStep.comment || '';
+                                        const updated = existing ? `${existing} ${text}` : text;
+                                        handleCommentChange(updated);
+                                    }}
                                 />
                             </div>
-                        </div>
-                    </div>
 
-                    {/* Step 2b: Photo Prompt Sub-Step */}
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
+                                <span className={`text-[11px] font-medium ${
+                                    currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
+                                }`}>
+                                    🎙️ Speak your observations now hands-free. Say &ldquo;Done&rdquo; or &ldquo;Continue&rdquo; when finished.
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => handleFindingNotesSubmit(currentStep.comment || '')}
+                                    className={`px-4 py-2 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${
+                                        currentStep.status === 'urgent' 
+                                            ? 'bg-red-600 hover:bg-red-700' 
+                                            : 'bg-amber-600 hover:bg-amber-700'
+                                    }`}
+                                >
+                                    <span>Save Notes & Check Photo</span>
+                                    <ArrowRight size={14} />
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Step: Photo Prompt Sub-Step */}
                     {subStep === 'photoPrompt' && (
-                        <div className="p-4 bg-indigo-50 border-2 border-indigo-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in">
+                        <div className="p-4 bg-indigo-50 border-2 border-indigo-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shadow-xs">
                             <div className="flex items-center gap-3">
                                 <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl flex-shrink-0">
                                     <Camera size={22} />
@@ -890,7 +1036,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         </div>
                     )}
 
-                    {/* Step 2c: Photo Notes Sub-Step */}
+                    {/* Step: Photo Notes Sub-Step */}
                     {subStep === 'photoNotes' && (
                         <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl space-y-3 animate-fade-in">
                             <div className="flex items-center justify-between">
