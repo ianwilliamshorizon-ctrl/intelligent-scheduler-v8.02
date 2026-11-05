@@ -3,7 +3,7 @@ import { ChecklistSection, ChecklistItemStatus } from '../types';
 import { 
     X, Check, AlertTriangle, XCircle, HelpCircle, Camera, 
     ArrowRight, ArrowLeft, Pause, Sparkles, CheckCircle2, ListFilter,
-    Volume2, VolumeX, Mic, MicOff, RotateCcw, Radio
+    Volume2, VolumeX, Mic, MicOff, RotateCcw, AlertCircle
 } from 'lucide-react';
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
@@ -67,16 +67,19 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const [isVoiceControlActive, setIsVoiceControlActive] = useState<boolean>(true);
     const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
     const [isListening, setIsListening] = useState<boolean>(false);
+    const [liveTranscript, setLiveTranscript] = useState<string>('');
     const [lastHeardCommand, setLastHeardCommand] = useState<string | null>(null);
     const [voiceError, setVoiceError] = useState<string | null>(null);
+    const [needsMicPermission, setNeedsMicPermission] = useState<boolean>(false);
 
-    // Refs for speech recognition and audio echo prevention
-    const isSpeakingRef = useRef<boolean>(false);
+    // Refs for speech recognition and synchronization
     const recognitionRef = useRef<any>(null);
-    const shouldListenRef = useRef<boolean>(true);
+    const isManuallyStoppedRef = useRef<boolean>(false);
     const subStepRef = useRef<'answer' | 'photoPrompt' | 'photoNotes'>('answer');
     const currentStepIndexRef = useRef<number>(0);
     const stepsRef = useRef<FlatInspectionStep[]>(initialSteps);
+    const lastBotUtteranceRef = useRef<string>('');
+    const lastCommandTimestampRef = useRef<number>(0);
 
     // Keep refs in sync with current state
     useEffect(() => {
@@ -90,10 +93,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     useEffect(() => {
         stepsRef.current = steps;
     }, [steps]);
-
-    useEffect(() => {
-        shouldListenRef.current = isVoiceControlActive;
-    }, [isVoiceControlActive]);
 
     // Check Web Speech API support
     const isSpeechRecognitionSupported = useMemo(() => {
@@ -132,8 +131,8 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         try {
             cloudSpeechSynthesis.cancel();
-            isSpeakingRef.current = true;
             setIsSpeaking(true);
+            lastBotUtteranceRef.current = text.toLowerCase();
 
             const cleaned = prepareTextForSpeech(text);
             const utterance = new CloudSpeechSynthesisUtterance(cleaned);
@@ -146,7 +145,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             utterance.lang = 'en-GB';
 
             const finishSpeaking = () => {
-                isSpeakingRef.current = false;
                 setIsSpeaking(false);
                 onDone?.();
             };
@@ -155,15 +153,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 finishSpeaking();
             };
 
-            utterance.onerror = (e: any) => {
-                console.warn('Speech synthesis error / interrupted:', e);
+            utterance.onerror = () => {
                 finishSpeaking();
             };
+
+            // Safety timeout to avoid getting stuck in isSpeaking state
+            setTimeout(() => {
+                setIsSpeaking(false);
+            }, 8000);
 
             cloudSpeechSynthesis.speak(utterance);
         } catch (err) {
             console.error('Failed to speak text:', err);
-            isSpeakingRef.current = false;
             setIsSpeaking(false);
             onDone?.();
         }
@@ -179,15 +180,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     }, [speakText]);
 
     // Replay current step audio
-    const handleRepeatAudio = () => {
-        if (subStep === 'answer') {
-            readCurrentStep(currentStepIndex);
-        } else if (subStep === 'photoPrompt') {
+    const handleRepeatAudio = useCallback(() => {
+        if (subStepRef.current === 'answer') {
+            readCurrentStep(currentStepIndexRef.current);
+        } else if (subStepRef.current === 'photoPrompt') {
             speakText("Do you need a photo for this step? Say Yes or No.");
-        } else if (subStep === 'photoNotes') {
+        } else if (subStepRef.current === 'photoNotes') {
             speakText("Photo flagged. Say your photo notes, or say Next when ready.");
         }
-    };
+    }, [readCurrentStep, speakText]);
 
     // Step status selection handler
     const handleSelectStatus = useCallback((status: ChecklistItemStatus) => {
@@ -213,18 +214,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         speakText(`${statusLabel} recorded. Do you need a photo for this step? Say Yes or No.`);
     }, [syncToParent, speakText]);
 
-    // Comment change handler
-    const handleCommentChange = useCallback((comment: string) => {
-        const stepIdx = currentStepIndexRef.current;
-        const updated = [...stepsRef.current];
-        updated[stepIdx] = {
-            ...updated[stepIdx],
-            comment
-        };
-        setSteps(updated);
-        syncToParent(updated);
-    }, [syncToParent]);
-
     // Advance to next step
     const advanceToNextStep = useCallback(() => {
         const stepIdx = currentStepIndexRef.current;
@@ -238,6 +227,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             speakText("Inspection complete! All items recorded.");
         }
     }, [readCurrentStep, speakText]);
+
+    // Comment change handler
+    const handleCommentChange = useCallback((comment: string) => {
+        const stepIdx = currentStepIndexRef.current;
+        const updated = [...stepsRef.current];
+        updated[stepIdx] = {
+            ...updated[stepIdx],
+            comment
+        };
+        setSteps(updated);
+        syncToParent(updated);
+    }, [syncToParent]);
 
     // Photo prompt decision handler
     const handlePhotoChoice = useCallback((needPhoto: boolean) => {
@@ -253,12 +254,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         if (needPhoto) {
             setLastHeardCommand("Photo Flagged: Yes");
             setSubStep('photoNotes');
-            speakText("Photo required flagged. Say photo notes, or say Next when ready.");
+            speakText("Photo required. Say photo notes, or say Next when ready.");
         } else {
             setLastHeardCommand("Photo Flagged: No");
-            speakText("No photo needed. Say Next when ready, or continue.", () => {
-                // Keep ready for "Next"
-            });
+            speakText("No photo needed. Say Next when ready.");
         }
     }, [syncToParent, speakText]);
 
@@ -314,109 +313,160 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         onClose();
     }, [syncToParent, onClose]);
 
-    // Continuous Hands-Free Speech Recognition Engine
-    useEffect(() => {
-        if (!isOpen) return;
+    // Text normalizer to clean punctuation and abbreviations (e.g. "o.k." -> "ok")
+    const normalizeSpeechText = (text: string): string => {
+        return text
+            .toLowerCase()
+            .replace(/o\.k\./gi, 'ok')
+            .replace(/o\.k/gi, 'ok')
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+    };
 
+    // Voice Engine Core
+    const startRecognitionEngine = useCallback(() => {
         const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (!SpeechRecognitionClass) {
-            setVoiceError("Speech recognition is not supported in this browser. You can still use the screen buttons.");
+            setVoiceError("Speech recognition is not supported in this browser. Please use Chrome or Edge.");
             return;
         }
 
-        let recognition: any = null;
-        let isManuallyStopped = false;
-
-        const startListening = () => {
-            if (!shouldListenRef.current || isManuallyStopped) return;
-
+        if (recognitionRef.current) {
             try {
-                recognition = new SpeechRecognitionClass();
-                recognitionRef.current = recognition;
-                recognition.continuous = true;
-                recognition.interimResults = false;
-                recognition.lang = 'en-GB';
+                recognitionRef.current.abort();
+            } catch (_) {}
+            recognitionRef.current = null;
+        }
 
-                recognition.onstart = () => {
-                    setIsListening(true);
-                    setVoiceError(null);
-                };
+        try {
+            const recognition = new SpeechRecognitionClass();
+            recognitionRef.current = recognition;
+            recognition.continuous = true;
+            recognition.interimResults = true; // Provides instant real-time feedback
+            recognition.lang = 'en-GB';
 
-                recognition.onresult = (event: any) => {
-                    // Prevent feedback/echo loops while system TTS is speaking
-                    if (isSpeakingRef.current) {
-                        return;
+            recognition.onstart = () => {
+                setIsListening(true);
+                setVoiceError(null);
+                setNeedsMicPermission(false);
+            };
+
+            recognition.onresult = (event: any) => {
+                let latestInterim = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    const result = event.results[i];
+                    const rawTranscript = result[0]?.transcript || '';
+                    latestInterim += rawTranscript;
+
+                    const cleaned = normalizeSpeechText(rawTranscript);
+                    setLiveTranscript(rawTranscript);
+
+                    // Prevent rapid double triggers within 600ms
+                    const now = Date.now();
+                    if (now - lastCommandTimestampRef.current < 600) {
+                        continue;
                     }
 
-                    const lastResult = event.results[event.results.length - 1];
-                    if (!lastResult || !lastResult[0]) return;
+                    // Check if speech matches user commands
+                    const isOk = /\b(ok|okay|o k|pass|passed|good|all good|fine|clear|tick)\b/i.test(cleaned);
+                    const isAttention = /\b(attention|amber|monitor|caution|warning|advisory)\b/i.test(cleaned);
+                    const isUrgent = /\b(urgent|red|fail|failed|danger|defect|dangerous|broken|replace)\b/i.test(cleaned);
+                    const isNa = /\b(not applicable|n a|na|skip)\b/i.test(cleaned);
 
-                    const transcript = lastResult[0].transcript.trim().toLowerCase();
-                    console.log("[Guided Host Voice Command Heard]:", transcript);
+                    const isPhotoYes = /\b(yes|yeah|yep|photo|take photo|need photo|require photo|true)\b/i.test(cleaned);
+                    const isPhotoNo = /\b(no|nope|nah|none|don't|dont|no photo|negative)\b/i.test(cleaned);
 
-                    // Navigation commands that work at any time
-                    if (/\b(next|continue|move on|go next|next step|next question)\b/i.test(transcript)) {
-                        setLastHeardCommand(`Heard: "${transcript}" → Next Step`);
+                    const isNext = /\b(next|continue|move on|go next|next step|next question|forward)\b/i.test(cleaned);
+                    const isBack = /\b(back|previous|go back|last step)\b/i.test(cleaned);
+                    const isRepeat = /\b(repeat|say again|read again|what was that|pardon)\b/i.test(cleaned);
+                    const isPause = /\b(pause|stop|save log|pause inspection|finish inspection)\b/i.test(cleaned);
+
+                    // Interrupt TTS if a definitive command is spoken
+                    if (isOk || isAttention || isUrgent || isNa || isPhotoYes || isPhotoNo || isNext || isBack || isRepeat || isPause) {
+                        cloudSpeechSynthesis.cancel();
+                        setIsSpeaking(false);
+                    }
+
+                    // Global Navigation
+                    if (isNext) {
+                        lastCommandTimestampRef.current = now;
+                        setLastHeardCommand(`Heard: "Next" → Next Step`);
                         advanceToNextStep();
                         return;
                     }
 
-                    if (/\b(back|previous|go back|last step)\b/i.test(transcript)) {
-                        setLastHeardCommand(`Heard: "${transcript}" → Previous Step`);
+                    if (isBack) {
+                        lastCommandTimestampRef.current = now;
+                        setLastHeardCommand(`Heard: "Back" → Previous Step`);
                         handlePreviousStep();
                         return;
                     }
 
-                    if (/\b(repeat|say again|read again|what was that|pardon)\b/i.test(transcript)) {
-                        setLastHeardCommand(`Heard: "${transcript}" → Replaying Audio`);
+                    if (isRepeat) {
+                        lastCommandTimestampRef.current = now;
+                        setLastHeardCommand(`Heard: "Repeat" → Replaying Audio`);
                         handleRepeatAudio();
                         return;
                     }
 
-                    if (/\b(pause|stop|save log|pause inspection|finish inspection)\b/i.test(transcript)) {
-                        setLastHeardCommand(`Heard: "${transcript}" → Pausing & Saving`);
+                    if (isPause) {
+                        lastCommandTimestampRef.current = now;
+                        setLastHeardCommand(`Heard: "Pause" → Pausing & Saving`);
                         handlePauseAndSave();
                         return;
                     }
 
-                    // Context-aware commands based on current sub-step
-                    const currentSubStep = subStepRef.current;
+                    // Context-aware Step Commands
+                    const activeSubStep = subStepRef.current;
 
-                    if (currentSubStep === 'answer') {
-                        // Status commands
-                        if (/\b(ok|okay|pass|passed|good|fine|all good|clear|tick)\b/i.test(transcript)) {
-                            setLastHeardCommand(`Heard: "${transcript}" → OK / Pass`);
+                    if (activeSubStep === 'answer') {
+                        if (isOk) {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "${rawTranscript}" → OK / Pass`);
                             handleSelectStatus('ok');
-                        } else if (/\b(attention|amber|monitor|caution|warning|advisory)\b/i.test(transcript)) {
-                            setLastHeardCommand(`Heard: "${transcript}" → Attention`);
+                            return;
+                        } else if (isAttention) {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "${rawTranscript}" → Attention`);
                             handleSelectStatus('attention');
-                        } else if (/\b(urgent|red|fail|failed|danger|defect|dangerous|broken|replace)\b/i.test(transcript)) {
-                            setLastHeardCommand(`Heard: "${transcript}" → Urgent`);
+                            return;
+                        } else if (isUrgent) {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "${rawTranscript}" → Urgent`);
                             handleSelectStatus('urgent');
-                        } else if (/\b(not applicable|n a|na|skip|none)\b/i.test(transcript)) {
-                            setLastHeardCommand(`Heard: "${transcript}" → N/A`);
+                            return;
+                        } else if (isNa) {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "${rawTranscript}" → N/A`);
                             handleSelectStatus('na');
+                            return;
                         }
-                    } else if (currentSubStep === 'photoPrompt') {
-                        // Photo Prompt commands
-                        if (/\b(yes|yeah|yep|photo|take photo|need photo|require photo|true)\b/i.test(transcript)) {
-                            setLastHeardCommand(`Heard: "${transcript}" → Photo Required`);
+                    } else if (activeSubStep === 'photoPrompt') {
+                        if (isPhotoYes) {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "${rawTranscript}" → Photo Required`);
                             handlePhotoChoice(true);
-                        } else if (/\b(no|nope|nah|none|don't|dont|no photo|negative)\b/i.test(transcript)) {
-                            setLastHeardCommand(`Heard: "${transcript}" → No Photo`);
+                            return;
+                        } else if (isPhotoNo) {
+                            lastCommandTimestampRef.current = now;
+                            setLastHeardCommand(`Heard: "${rawTranscript}" → No Photo`);
                             handlePhotoChoice(false);
+                            return;
                         }
-                    } else if (currentSubStep === 'photoNotes') {
-                        // Photo Notes dictation
-                        if (/\b(save|done|finish notes|complete notes)\b/i.test(transcript)) {
+                    } else if (activeSubStep === 'photoNotes') {
+                        if (/\b(save|done|finish notes|complete notes)\b/i.test(cleaned)) {
+                            lastCommandTimestampRef.current = now;
                             const stepIdx = currentStepIndexRef.current;
                             handlePhotoNotesSubmit(stepsRef.current[stepIdx]?.photoNotes || '');
-                        } else {
-                            // Dictate photo notes
+                            return;
+                        } else if (result.isFinal) {
+                            // Dictate photo notes on final results
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.photoNotes || '';
-                            const newNotes = existing ? `${existing} ${transcript}` : transcript;
-                            setLastHeardCommand(`Dictated: "${transcript}"`);
+                            const newNotes = existing ? `${existing} ${rawTranscript}` : rawTranscript;
+                            setLastHeardCommand(`Dictated: "${rawTranscript}"`);
                             
                             const updated = [...stepsRef.current];
                             updated[stepIdx] = {
@@ -426,58 +476,105 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             setSteps(updated);
                         }
                     }
-                };
+                }
+            };
 
-                recognition.onerror = (event: any) => {
-                    console.warn('[Guided Host Voice Error]:', event.error);
-                    if (event.error === 'not-allowed') {
-                        setVoiceError('Microphone permission blocked. Please enable microphone permissions in your browser.');
-                        setIsListening(false);
-                    }
-                };
-
-                recognition.onend = () => {
+            recognition.onerror = (event: any) => {
+                if (event.error === 'no-speech') {
+                    // Normal in continuous mode when no speech detected
+                    return;
+                }
+                if (event.error === 'not-allowed') {
+                    setNeedsMicPermission(true);
+                    setVoiceError('Microphone permission required. Click "Allow Microphone" to enable hands-free voice.');
                     setIsListening(false);
-                    // Automatically restart continuous listening if modal is still active
-                    if (shouldListenRef.current && !isManuallyStopped && isOpen) {
-                        setTimeout(() => {
+                    return;
+                }
+                console.warn('[Speech Recognition notice]:', event.error);
+            };
+
+            recognition.onend = () => {
+                setIsListening(false);
+                // Automatically restart continuous listening if modal is still open
+                if (!isManuallyStoppedRef.current && isOpen) {
+                    setTimeout(() => {
+                        if (!isManuallyStoppedRef.current && isOpen) {
                             try {
-                                if (shouldListenRef.current && !isManuallyStopped) {
-                                    recognition.start();
-                                }
+                                recognition.start();
                             } catch (_) {}
-                        }, 300);
-                    }
-                };
+                        }
+                    }, 200);
+                }
+            };
 
-                recognition.start();
-            } catch (err) {
-                console.warn('[Guided Host Voice Init Error]:', err);
-            }
-        };
-
-        if (isVoiceControlActive) {
-            startListening();
+            recognition.start();
+        } catch (err) {
+            console.warn('[Speech Recognition Init Error]:', err);
         }
+    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handlePhotoChoice, handlePhotoNotesSubmit, isOpen]);
+
+    // Request Mic Permission & Start
+    const handleEnableMicrophone = async () => {
+        try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // Release audio tracks so SpeechRecognition has full access
+                stream.getTracks().forEach(track => track.stop());
+            }
+            setNeedsMicPermission(false);
+            setVoiceError(null);
+            isManuallyStoppedRef.current = false;
+            setIsVoiceControlActive(true);
+            startRecognitionEngine();
+        } catch (err: any) {
+            console.warn('Microphone permission denied:', err);
+            setNeedsMicPermission(true);
+            setVoiceError('Microphone access was denied. Please allow microphone permissions in your browser bar.');
+        }
+    };
+
+    // Toggle voice control listening
+    const handleToggleVoiceControl = () => {
+        if (isVoiceControlActive) {
+            isManuallyStoppedRef.current = true;
+            setIsVoiceControlActive(false);
+            if (recognitionRef.current) {
+                try {
+                    recognitionRef.current.stop();
+                } catch (_) {}
+            }
+        } else {
+            isManuallyStoppedRef.current = false;
+            setIsVoiceControlActive(true);
+            handleEnableMicrophone();
+        }
+    };
+
+    // Start recognition automatically on modal open
+    useEffect(() => {
+        if (!isOpen) return;
+
+        isManuallyStoppedRef.current = false;
+        // Prompt for mic permission or start listening
+        handleEnableMicrophone();
 
         return () => {
-            isManuallyStopped = true;
+            isManuallyStoppedRef.current = true;
             cloudSpeechSynthesis.cancel();
-            if (recognition) {
+            if (recognitionRef.current) {
                 try {
-                    recognition.stop();
+                    recognitionRef.current.abort();
                 } catch (_) {}
             }
         };
-    }, [isOpen, isVoiceControlActive, advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handlePhotoChoice, handlePhotoNotesSubmit]);
+    }, [isOpen]);
 
-    // Read initial step when modal opens
+    // Read initial question after slight mount delay
     useEffect(() => {
         if (isOpen && steps.length > 0) {
-            // Small initial delay so browser finishes modal transition
             const timer = setTimeout(() => {
                 readCurrentStep(0);
-            }, 500);
+            }, 600);
             return () => clearTimeout(timer);
         }
     }, [isOpen, readCurrentStep, steps.length]);
@@ -521,7 +618,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 }
                                 setIsTtsEnabled(!isTtsEnabled);
                             }}
-                            className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold ${
+                            className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
                                 isTtsEnabled 
                                     ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/30' 
                                     : 'bg-white/10 text-slate-400 hover:text-white'
@@ -536,23 +633,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         {isSpeechRecognitionSupported && (
                             <button
                                 type="button"
-                                onClick={() => setIsVoiceControlActive(!isVoiceControlActive)}
-                                className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold ${
-                                    isVoiceControlActive 
+                                onClick={handleToggleVoiceControl}
+                                className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
+                                    isVoiceControlActive && isListening
                                         ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30' 
                                         : 'bg-white/10 text-slate-400 hover:text-white'
                                 }`}
                                 title={isVoiceControlActive ? 'Pause Hands-Free Voice' : 'Resume Hands-Free Voice'}
                             >
-                                {isVoiceControlActive ? <Mic size={16} className="text-emerald-400 animate-pulse" /> : <MicOff size={16} />}
-                                <span className="hidden sm:inline">{isVoiceControlActive ? 'Mic Active' : 'Mic Off'}</span>
+                                {isVoiceControlActive && isListening ? <Mic size={16} className="text-emerald-400 animate-pulse" /> : <MicOff size={16} />}
+                                <span className="hidden sm:inline">{isVoiceControlActive && isListening ? 'Mic Active' : 'Mic Off'}</span>
                             </button>
                         )}
 
                         <button
                             type="button"
                             onClick={handlePauseAndSave}
-                            className="p-2 hover:bg-white/10 rounded-xl transition text-slate-400 hover:text-white ml-1"
+                            className="p-2 hover:bg-white/10 rounded-xl transition text-slate-400 hover:text-white ml-1 cursor-pointer"
                             title="Pause & Save"
                         >
                             <X size={20} />
@@ -568,31 +665,39 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     />
                 </div>
 
-                {/* Voice Status Pill / Banner */}
+                {/* Real-time Voice Status Pill / Banner */}
                 <div className="bg-slate-900 text-slate-200 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-medium">
-                    <div className="flex items-center gap-2 overflow-hidden">
+                    <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
                         {isSpeaking ? (
                             <div className="flex items-center gap-2 text-indigo-400 font-bold animate-pulse">
                                 <Volume2 size={15} />
-                                <span>Host is reading aloud...</span>
+                                <span>Host speaking... (you can speak anytime to interrupt)</span>
                             </div>
                         ) : isVoiceControlActive && isListening ? (
-                            <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                                <span className="relative flex h-2 w-2">
+                            <div className="flex items-center gap-2 text-emerald-400 font-bold truncate">
+                                <span className="relative flex h-2.5 w-2.5 flex-shrink-0">
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                                 </span>
-                                <span>Listening... (Say &ldquo;OK&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Urgent&rdquo;, &ldquo;Next&rdquo;)</span>
+                                {liveTranscript ? (
+                                    <span className="text-amber-300 truncate">
+                                        🎤 Hearing: &ldquo;{liveTranscript}&rdquo;
+                                    </span>
+                                ) : (
+                                    <span className="truncate">
+                                        Listening... Say &ldquo;OK&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Urgent&rdquo;, or &ldquo;Next&rdquo;
+                                    </span>
+                                )}
                             </div>
                         ) : (
                             <div className="flex items-center gap-2 text-slate-400">
                                 <MicOff size={14} />
-                                <span>Voice control paused. Click mic to enable.</span>
+                                <span>Voice control off. Click the mic button to turn on.</span>
                             </div>
                         )}
 
                         {lastHeardCommand && (
-                            <span className="hidden md:inline-flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded text-[11px] text-amber-300 font-semibold ml-2">
+                            <span className="hidden sm:inline-flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded text-[11px] text-emerald-300 font-semibold flex-shrink-0">
                                 🎯 {lastHeardCommand}
                             </span>
                         )}
@@ -602,7 +707,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         <button
                             type="button"
                             onClick={handleRepeatAudio}
-                            className="p-1 hover:bg-white/10 text-slate-300 hover:text-white rounded flex items-center gap-1 text-[11px] font-bold transition"
+                            className="p-1 hover:bg-white/10 text-slate-300 hover:text-white rounded flex items-center gap-1 text-[11px] font-bold transition cursor-pointer"
                             title="Repeat Question Audio"
                         >
                             <RotateCcw size={12} />
@@ -611,13 +716,30 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     </div>
                 </div>
 
-                {voiceError && (
+                {/* Mic Permission Banner if blocked */}
+                {needsMicPermission && (
+                    <div className="bg-amber-500 text-slate-900 px-4 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600">
+                        <div className="flex items-center gap-2">
+                            <AlertCircle size={16} />
+                            <span>Microphone access needed for hands-free voice control.</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleEnableMicrophone}
+                            className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-black shadow-xs hover:bg-slate-800 transition cursor-pointer"
+                        >
+                            Allow Microphone
+                        </button>
+                    </div>
+                )}
+
+                {voiceError && !needsMicPermission && (
                     <div className="bg-amber-50 text-amber-900 px-4 py-1.5 text-xs font-semibold border-b border-amber-200 flex items-center justify-between">
                         <span>⚠️ {voiceError}</span>
                         <button 
                             type="button" 
                             onClick={() => setVoiceError(null)} 
-                            className="text-amber-700 hover:text-amber-950 underline font-bold ml-2"
+                            className="text-amber-700 hover:text-amber-950 underline font-bold ml-2 cursor-pointer"
                         >
                             Dismiss
                         </button>
@@ -644,7 +766,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             <button
                                 type="button"
                                 onClick={handleRepeatAudio}
-                                className="p-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-indigo-600 transition shadow-xs flex-shrink-0"
+                                className="p-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-indigo-600 transition shadow-xs flex-shrink-0 cursor-pointer"
                                 title="Read question aloud"
                             >
                                 <Volume2 size={18} />
@@ -658,14 +780,14 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     Record Finding:
                                 </p>
                                 <span className="text-[11px] text-slate-600 font-semibold italic">
-                                    (Or say: &ldquo;Pass&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Urgent&rdquo;, &ldquo;N/A&rdquo;)
+                                    (Say: &ldquo;OK&rdquo; / &ldquo;Pass&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Urgent&rdquo;)
                                 </span>
                             </div>
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('ok')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition ${
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
                                         currentStep.status === 'ok'
                                             ? 'bg-emerald-500 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300'
                                             : 'bg-white hover:bg-emerald-50 text-emerald-800 border-slate-200 hover:border-emerald-300'
@@ -677,7 +799,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('attention')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition ${
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
                                         currentStep.status === 'attention'
                                             ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300'
                                             : 'bg-white hover:bg-amber-50 text-amber-800 border-slate-200 hover:border-amber-300'
@@ -689,7 +811,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('urgent')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition ${
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
                                         currentStep.status === 'urgent'
                                             ? 'bg-red-500 text-white border-red-600 shadow-md ring-2 ring-red-300'
                                             : 'bg-white hover:bg-red-50 text-red-800 border-slate-200 hover:border-red-300'
@@ -701,7 +823,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('na')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition ${
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
                                         currentStep.status === 'na'
                                             ? 'bg-slate-500 text-white border-slate-600 shadow-md ring-2 ring-slate-300'
                                             : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300'
@@ -753,14 +875,14 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handlePhotoChoice(true)}
-                                    className="flex-1 sm:flex-none px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs"
+                                    className="flex-1 sm:flex-none px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
                                 >
                                     Yes (Require Photo)
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => handlePhotoChoice(false)}
-                                    className="flex-1 sm:flex-none px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition"
+                                    className="flex-1 sm:flex-none px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
                                 >
                                     No (Proceed)
                                 </button>
@@ -804,7 +926,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handlePhotoNotesSubmit(currentStep.photoNotes || '')}
-                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5"
+                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <span>Save Notes & Continue</span>
                                     <ArrowRight size={14} />
@@ -825,7 +947,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             <button
                                 type="button"
                                 onClick={advanceToNextStep}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex-shrink-0 flex items-center gap-1"
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex-shrink-0 flex items-center gap-1 cursor-pointer"
                             >
                                 <span>Next</span>
                                 <ArrowRight size={12} />
