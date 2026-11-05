@@ -116,6 +116,9 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                     checklistData={checklistData}
                     onUpdate={onChecklistUpdate}
                     isReadOnly={isReadOnly}
+                    vehicleRegistration={vehicleRegistration}
+                    vehicleModel={vehicleModel}
+                    hideGuidedHostButton={true}
                 />
             ) : (
                 <div className="text-center py-10 bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl text-slate-700">

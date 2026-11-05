@@ -1,16 +1,20 @@
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { ChecklistSection, ChecklistItem, ChecklistItemStatus } from '../types';
-import { Check, AlertTriangle, XCircle, HelpCircle, Volume2 } from 'lucide-react';
+import { Check, AlertTriangle, XCircle, HelpCircle, Volume2, Sparkles, Play } from 'lucide-react';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { AppContext } from '../core/state/AppContext';
+import GuidedInspectionModal from './GuidedInspectionModal';
 
 interface InspectionChecklistProps {
     checklistData: ChecklistSection[];
     onUpdate: (updatedChecklist: ChecklistSection[]) => void;
     isReadOnly: boolean;
+    vehicleRegistration?: string;
+    vehicleModel?: string;
+    hideGuidedHostButton?: boolean;
 }
 
 const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color: string, hexColor: string, label: string }> = {
@@ -20,10 +24,18 @@ const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color
     na: { icon: HelpCircle, color: 'bg-gray-400', hexColor: '#9ca3af', label: 'N/A' },
 };
 
-const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData, onUpdate, isReadOnly }) => {
+const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ 
+    checklistData, 
+    onUpdate, 
+    isReadOnly,
+    vehicleRegistration,
+    vehicleModel,
+    hideGuidedHostButton = false
+}) => {
     const appContext = React.useContext(AppContext);
     const preferredVoiceName = appContext?.preferredVoiceName || null;
     const [voices, setVoices] = React.useState<any[]>([]);
+    const [isGuidedModalOpen, setIsGuidedModalOpen] = useState(false);
 
     React.useEffect(() => {
         const loadVoices = () => {
@@ -57,8 +69,47 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
         onUpdate(updatedSections);
     };
     
+    const hasItems = checklistData && checklistData.length > 0;
+
     return (
         <div className="space-y-4 text-slate-900">
+            {/* Guided Inspection Host Banner at the top of the checklist */}
+            {!isReadOnly && !hideGuidedHostButton && hasItems && (
+                <div className="p-3.5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl flex flex-wrap justify-between items-center gap-3 border border-slate-800 shadow-md text-white mb-2">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-indigo-500/20 text-indigo-400 rounded-xl border border-indigo-400/30 flex-shrink-0">
+                            <Sparkles size={18} />
+                        </div>
+                        <div>
+                            <span className="text-sm font-black text-white block">Guided Voice Inspection Host</span>
+                            <span className="text-xs text-slate-300">
+                                Reads questions aloud • Hands-free voice recognition (&ldquo;Pass&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Next&rdquo;)
+                            </span>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setIsGuidedModalOpen(true)}
+                        className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-indigo-600 hover:from-indigo-600 hover:to-indigo-700 active:scale-95 text-white rounded-xl text-xs font-black transition shadow-lg flex items-center gap-2 cursor-pointer"
+                    >
+                        <Play size={14} className="fill-white" />
+                        <span>Start Guided Inspection (Hands-Free Voice)</span>
+                    </button>
+                </div>
+            )}
+
+            {/* Guided Inspection Step-by-Step Modal */}
+            {isGuidedModalOpen && hasItems && (
+                <GuidedInspectionModal
+                    isOpen={isGuidedModalOpen}
+                    onClose={() => setIsGuidedModalOpen(false)}
+                    checklistData={checklistData}
+                    onChecklistUpdate={onUpdate}
+                    vehicleRegistration={vehicleRegistration}
+                    vehicleModel={vehicleModel}
+                />
+            )}
+
             {checklistData.map((section) => {
                 return (
                     <React.Fragment key={section.id}>
@@ -92,42 +143,42 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({ checklistData
                                                 type="text"
                                                 value={item.comment || ''}
                                                 onChange={(e) => handleItemChange(section.id, item.id, 'comment', e.target.value)}
-                                                placeholder="Add comment..."
-                                                className="flex-grow p-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none"
+                                                placeholder="Add a comment..."
+                                                className="w-full p-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-900 bg-white placeholder:text-slate-400 focus:ring-1 focus:ring-indigo-500 outline-none"
                                                 disabled={isReadOnly}
                                             />
-                                            <SpeechToTextButton 
-                                                onTranscript={(text) => {
-                                                    const current = item.comment || '';
-                                                    const space = current && !current.endsWith(' ') ? ' ' : '';
-                                                    handleItemChange(section.id, item.id, 'comment', current + space + text);
-                                                }}
-                                                disabled={isReadOnly}
-                                                className="!p-1.5"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    cloudSpeechSynthesis.cancel();
-                                                    const plainText = prepareTextForSpeech(item.comment || '');
-                                                    if (!plainText) return;
-                                                    
-                                                    const utterance = new CloudSpeechSynthesisUtterance(plainText);
-                                                    const selectedVoice = findBestVoice(voices, { 
-                                                        gender: 'female', 
-                                                        lang: 'en-GB',
-                                                        preferredVoiceName 
-                                                    });
-                                                    if (selectedVoice) utterance.voice = selectedVoice;
-                                                    
-                                                    utterance.lang = 'en-GB';
-                                                    cloudSpeechSynthesis.speak(utterance);
-                                                }}
-                                                className="p-1.5 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 text-indigo-600 transition-all active:scale-90"
-                                                title="Read Aloud"
-                                            >
-                                                <Volume2 size={12} />
-                                            </button>
+                                            <div className="flex items-center gap-1">
+                                                <SpeechToTextButton 
+                                                    onTranscript={(text) => {
+                                                        const current = item.comment || '';
+                                                        const space = current && !current.endsWith(' ') ? ' ' : '';
+                                                        handleItemChange(section.id, item.id, 'comment', current + space + text);
+                                                    }}
+                                                    disabled={isReadOnly}
+                                                    className="!p-1.5 shadow-sm"
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        cloudSpeechSynthesis.cancel();
+                                                        const plainText = prepareTextForSpeech(`${item.label}. ${item.comment || ''}`);
+                                                        const utterance = new CloudSpeechSynthesisUtterance(plainText);
+                                                        const selectedVoice = findBestVoice(voices, { 
+                                                            gender: 'female', 
+                                                            lang: 'en-GB',
+                                                            preferredVoiceName 
+                                                        });
+                                                        if (selectedVoice) utterance.voice = selectedVoice;
+                                                        
+                                                        utterance.lang = 'en-GB';
+                                                        cloudSpeechSynthesis.speak(utterance);
+                                                    }}
+                                                    className="p-1.5 bg-white border border-gray-200 rounded-full shadow-sm hover:bg-gray-50 text-indigo-600 transition-all active:scale-90"
+                                                    title="Read Aloud"
+                                                >
+                                                    <Volume2 size={12} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
