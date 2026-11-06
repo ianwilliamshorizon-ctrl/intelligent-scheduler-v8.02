@@ -70,7 +70,11 @@ export const evaluateTyreStatus = (outer?: number, middle?: number, inner?: numb
 };
 
 // Spoken numbers extractor for tyre tread depths
-export const parseSpokenDepths = (rawText: string, isFinal: boolean = false): { outer: number; middle: number; inner: number } | null => {
+export const parseSpokenDepths = (
+    rawText: string,
+    isFinal: boolean = false,
+    existingBuffer: number[] = []
+): { result: { outer: number; middle: number; inner: number } | null; newBuffer: number[] } => {
     let t = rawText.toLowerCase();
     const wordDigits: Record<string, string> = {
         zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5',
@@ -82,34 +86,50 @@ export const parseSpokenDepths = (rawText: string, isFinal: boolean = false): { 
     t = t.replace(/(\d+)\s*point\s*(\d+)/gi, '$1.$2');
 
     const matches = t.match(/\d+(?:\.\d+)?/g);
-    if (!matches || matches.length === 0) return null;
+    if (!matches || matches.length === 0) {
+        return { result: null, newBuffer: existingBuffer };
+    }
 
     const nums = matches.map(Number).filter(n => !isNaN(n) && n >= 0 && n <= 35);
-    if (nums.length === 0) return null;
-
-    // 1. If 3 or more numbers provided (e.g. "4, 3, 2" or "5.5, 5, 4.5"): outer, middle, inner
-    if (nums.length >= 3) {
-        return { outer: nums[0], middle: nums[1], inner: nums[2] };
+    if (nums.length === 0) {
+        return { result: null, newBuffer: existingBuffer };
     }
 
-    // 2. Explicit keyword stating all depths are the same (e.g. "all 4", "4 across", "even 5")
+    // Check if user explicitly said "across", "all", "even", "same"
     const isAllAcross = /\b(across|all|even|same|round|flat)\b/i.test(t);
     if (nums.length === 1 && isAllAcross) {
-        return { outer: nums[0], middle: nums[0], inner: nums[0] };
+        return {
+            result: { outer: nums[0], middle: nums[0], inner: nums[0] },
+            newBuffer: [nums[0], nums[0], nums[0]]
+        };
     }
 
-    // 3. If speech engine has finalized and user has finished talking
+    // Case A: 3 or more numbers provided in one phrase (e.g. "4, 3, 2" or "5.5 5 4.5")
+    if (nums.length >= 3) {
+        return {
+            result: { outer: nums[0], middle: nums[1], inner: nums[2] },
+            newBuffer: [nums[0], nums[1], nums[2]]
+        };
+    }
+
+    // Case B: Numbers spoken sequentially with pauses (on finalized utterance)
     if (isFinal) {
-        if (nums.length === 1) {
-            return { outer: nums[0], middle: nums[0], inner: nums[0] };
+        const nextBuf = [...existingBuffer];
+        for (const n of nums) {
+            if (nextBuf.length < 3) {
+                nextBuf.push(n);
+            }
         }
-        if (nums.length === 2) {
-            return { outer: nums[0], middle: nums[0], inner: nums[1] };
+        if (nextBuf.length === 3) {
+            return {
+                result: { outer: nextBuf[0], middle: nextBuf[1], inner: nextBuf[2] },
+                newBuffer: nextBuf
+            };
         }
+        return { result: null, newBuffer: nextBuf };
     }
 
-    // While still in-flight / interim and fewer than 3 numbers, wait for user to finish saying all 3!
-    return null;
+    return { result: null, newBuffer: existingBuffer };
 };
 
 const createDefaultTyres = (incoming?: TyreCheckData): TyreCheckData => {
@@ -256,6 +276,8 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const isSpeakingRef = useRef<boolean>(false);
     const safetyTimerRef = useRef<any>(null);
     const lastSpeechEndTimeRef = useRef<number>(0);
+    const depthsBufferRef = useRef<number[]>([]);
+    const [depthsBufferDisplay, setDepthsBufferDisplay] = useState<number[]>([]);
 
     // Keep refs in sync with current state
     useEffect(() => { subStepRef.current = subStep; }, [subStep]);
@@ -483,10 +505,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     // Reset finding to re-record status
     const handleResetFinding = useCallback(() => {
+        const stepIdx = currentStepIndexRef.current;
+        const updated = [...stepsRef.current];
+        updated[stepIdx] = {
+            ...updated[stepIdx],
+            status: 'na',
+            comment: '',
+            photoRequired: undefined,
+            photoNotes: ''
+        };
+        setSteps(updated);
+        syncToParent(updated);
         setSubStep('answer');
+        subStepRef.current = 'answer';
+        setLiveTranscript('');
         setLastHeardCommand("Finding reset to re-record");
         speakText("Finding reset. Say Pass, Attention, or Urgent.");
-    }, [speakText]);
+    }, [syncToParent, speakText]);
 
     // Advance to next step (or transition to tyre check when checklist is complete)
     const advanceToNextStep = useCallback(() => {
@@ -580,7 +615,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         if (stepIdx > 0) {
             const prevIdx = stepIdx - 1;
             setCurrentStepIndex(prevIdx);
+            currentStepIndexRef.current = prevIdx;
             setSubStep('answer');
+            subStepRef.current = 'answer';
             saveProgress(prevIdx);
             readCurrentStep(prevIdx);
         }
@@ -592,8 +629,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         if (targetStepNumber >= 1 && targetStepNumber <= total) {
             const idx = targetStepNumber - 1;
             setMode('checklist');
+            modeRef.current = 'checklist';
             setCurrentStepIndex(idx);
+            currentStepIndexRef.current = idx;
             setSubStep('answer');
+            subStepRef.current = 'answer';
             setJumpStepInput('');
             saveProgress(idx);
             setLastHeardCommand(`Jumped to step #${targetStepNumber}`);
@@ -602,6 +642,17 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     }, [readCurrentStep, saveProgress]);
 
     // --- TYRE CHECK ACTIONS ---
+    const goToTyre = useCallback((idx: number, sub: TyreSubStep = 'depths') => {
+        setCurrentTyreIndex(idx);
+        currentTyreIndexRef.current = idx;
+        setTyreSubStep(sub);
+        tyreSubStepRef.current = sub;
+        depthsBufferRef.current = [];
+        setDepthsBufferDisplay([]);
+        setLiveTranscript('');
+        lastCommandTimestampRef.current = Date.now();
+    }, []);
+
     const handleTyreDepthsSubmit = useCallback((outer: number, middle: number, inner: number) => {
         const loc = TYRE_KEYS[currentTyreIndexRef.current];
         const current = tyresRef.current[loc] || { indicator: 'na' };
@@ -618,6 +669,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
         saveTyreData(updated);
         setTyreSubStep('comments');
+        tyreSubStepRef.current = 'comments';
+        depthsBufferRef.current = [];
+        setDepthsBufferDisplay([]);
         const statusPhrase = autoStatus === 'ok' ? 'Pass' : autoStatus === 'attention' ? 'Attention required' : 'Urgent replacement';
         setLastHeardCommand(`Depths: O:${outer} M:${middle} I:${inner} mm (${statusPhrase})`);
         speakText(`${TYRE_META[loc].name}: Outer ${outer}, middle ${middle}, inner ${inner} recorded. Status ${statusPhrase}. Any tyre comments like a nail or damage, or say None?`);
@@ -641,19 +695,21 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         const nextIdx = currentTyreIndexRef.current + 1;
         if (nextIdx < 4) {
-            setCurrentTyreIndex(nextIdx);
-            setTyreSubStep('depths');
+            goToTyre(nextIdx, 'depths');
             const nextLoc = TYRE_KEYS[nextIdx];
             const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
             speakText(`${commentConfirm}Moving to ${TYRE_META[nextLoc].name}. Say outer, middle, and inner tread depths.`);
         } else {
             setMode('summary');
+            modeRef.current = 'summary';
             speakText("Tyre check report complete! All 4 road tyres and inspection checklist points have been recorded and saved.");
         }
     }, [saveTyreData, speakText]);
 
     const handleRetakeTyreDepths = useCallback(() => {
         const loc = TYRE_KEYS[currentTyreIndexRef.current];
+        depthsBufferRef.current = [];
+        setDepthsBufferDisplay([]);
         const current = tyresRef.current[loc] || { indicator: 'na' };
         const updated = {
             ...tyresRef.current,
@@ -691,34 +747,33 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const handleNextTyre = useCallback(() => {
         const nextIdx = currentTyreIndexRef.current + 1;
         if (nextIdx < TYRE_KEYS.length) {
-            setCurrentTyreIndex(nextIdx);
-            setTyreSubStep('depths');
+            goToTyre(nextIdx, 'depths');
             readCurrentTyre(nextIdx, 'depths');
         } else {
             setMode('summary');
+            modeRef.current = 'summary';
             speakText("All tyres recorded. Showing inspection summary.");
         }
-    }, [readCurrentTyre, speakText]);
+    }, [goToTyre, readCurrentTyre, speakText]);
 
     const handlePreviousTyre = useCallback(() => {
         if (currentTyreIndexRef.current > 0) {
             const prevIdx = currentTyreIndexRef.current - 1;
-            setCurrentTyreIndex(prevIdx);
-            setTyreSubStep('depths');
+            goToTyre(prevIdx, 'depths');
             readCurrentTyre(prevIdx, 'depths');
         } else {
             setMode('checklist');
+            modeRef.current = 'checklist';
             readCurrentStep(stepsRef.current.length - 1);
         }
-    }, [readCurrentTyre, readCurrentStep]);
+    }, [goToTyre, readCurrentTyre, readCurrentStep]);
 
     const handleJumpToTyre = useCallback((idx: number) => {
         if (idx >= 0 && idx < TYRE_KEYS.length) {
-            setCurrentTyreIndex(idx);
-            setTyreSubStep('depths');
+            goToTyre(idx, 'depths');
             readCurrentTyre(idx, 'depths');
         }
-    }, [readCurrentTyre]);
+    }, [goToTyre, readCurrentTyre]);
 
     const handleManualTyreUpdate = useCallback((location: TyreLocation, field: keyof TyreData, value: any) => {
         const current = tyresRef.current[location] || { indicator: 'na' };
@@ -888,10 +943,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 return;
                             }
                             // Try parsing 3 depths or single depth across
-                            const parsed = parseSpokenDepths(cleaned, result.isFinal);
-                            if (parsed) {
+                            const { result: parsedResult, newBuffer } = parseSpokenDepths(cleaned, result.isFinal, depthsBufferRef.current);
+                            depthsBufferRef.current = newBuffer;
+                            setDepthsBufferDisplay(newBuffer);
+                            if (parsedResult) {
                                 lastCommandTimestampRef.current = now;
-                                handleTyreDepthsSubmit(parsed.outer, parsed.middle, parsed.inner);
+                                handleTyreDepthsSubmit(parsedResult.outer, parsedResult.middle, parsedResult.inner);
                                 return;
                             }
                         } else if (activeSub === 'comments') {
@@ -1676,7 +1733,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                             step="0.1"
                                             min="0"
                                             max="30"
-                                            value={activeTyreData.outer ?? ''}
+                                            value={activeTyreData.outer ?? (depthsBufferDisplay[0] ?? '')}
                                             onChange={e => handleManualTyreUpdate(activeTyreLoc, 'outer', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                             placeholder="e.g. 5.5"
                                             className={`w-full p-3 border-2 rounded-xl text-center text-lg font-black text-slate-900 bg-white outline-none focus:ring-2 focus:ring-indigo-500 ${
@@ -1693,7 +1750,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                             step="0.1"
                                             min="0"
                                             max="30"
-                                            value={activeTyreData.middle ?? ''}
+                                            value={activeTyreData.middle ?? (depthsBufferDisplay[1] ?? '')}
                                             onChange={e => handleManualTyreUpdate(activeTyreLoc, 'middle', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                             placeholder="e.g. 5.0"
                                             className={`w-full p-3 border-2 rounded-xl text-center text-lg font-black text-slate-900 bg-white outline-none focus:ring-2 focus:ring-indigo-500 ${
@@ -1710,7 +1767,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                             step="0.1"
                                             min="0"
                                             max="30"
-                                            value={activeTyreData.inner ?? ''}
+                                            value={activeTyreData.inner ?? (depthsBufferDisplay[2] ?? '')}
                                             onChange={e => handleManualTyreUpdate(activeTyreLoc, 'inner', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                                             placeholder="e.g. 4.5"
                                             className={`w-full p-3 border-2 rounded-xl text-center text-lg font-black text-slate-900 bg-white outline-none focus:ring-2 focus:ring-indigo-500 ${
