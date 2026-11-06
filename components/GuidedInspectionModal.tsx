@@ -38,12 +38,12 @@ type TyreSubStep = 'depths' | 'comments';
 
 export const TYRE_KEYS: TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
 
-export const TYRE_META: Record<TyreLocation, { name: string; short: string; position: string }> = {
-    frontLeft: { name: 'Front Left (N/S/F)', short: 'FL', position: 'Nearside Front' },
-    frontRight: { name: 'Front Right (O/S/F)', short: 'FR', position: 'Offside Front' },
-    rearLeft: { name: 'Rear Left (N/S/R)', short: 'RL', position: 'Nearside Rear' },
-    rearRight: { name: 'Rear Right (O/S/R)', short: 'RR', position: 'Offside Rear' },
-    spare: { name: 'Spare Tyre', short: 'SP', position: 'Boot / Underslung' },
+export const TYRE_META: Record<TyreLocation, { name: string; spokenName: string; short: string; position: string }> = {
+    frontLeft: { name: 'Nearside Front (NSF)', spokenName: 'Near side Front', short: 'NSF', position: 'Nearside Front' },
+    frontRight: { name: 'Offside Front (OSF)', spokenName: 'Off side Front', short: 'OSF', position: 'Offside Front' },
+    rearLeft: { name: 'Nearside Rear (NSR)', spokenName: 'Near side Rear', short: 'NSR', position: 'Nearside Rear' },
+    rearRight: { name: 'Offside Rear (OSR)', spokenName: 'Off side Rear', short: 'OSR', position: 'Offside Rear' },
+    spare: { name: 'Spare Tyre', spokenName: 'Spare Tyre', short: 'SP', position: 'Boot / Underslung' },
 };
 
 export const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType; color: string; bg: string; border: string; label: string }> = {
@@ -425,9 +425,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         const loc = TYRE_KEYS[tyreIdx];
         const info = TYRE_META[loc];
         if (sub === 'depths') {
-            speakText(`${info.name}. Please say outer, middle, and inner tread depths. For example, 6, 6, 5.`);
+            speakText(`${info.spokenName || info.position}. Please say outer, middle, and inner tread depths. For example, 6, 6, 5.`);
         } else {
-            speakText(`${info.name}: Say comments such as nail in tyre or damage, or say None when ready.`);
+            speakText(`${info.spokenName || info.position}: Say comments such as nail in tyre or damage, or say None when ready.`);
         }
     }, [speakText]);
 
@@ -554,7 +554,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             setMode('tyres');
             setCurrentTyreIndex(0);
             setTyreSubStep('depths');
-            speakText("Checklist items complete! Now moving to the tyre check report. Starting with the Front Left tyre. Please say outer, middle, and inner tread depths.");
+            speakText("Checklist items complete! Now moving to the tyre check report. Starting with Near side Front. Please say outer, middle, and inner tread depths.");
         }
     }, [readCurrentStep, speakText, saveProgress]);
 
@@ -690,7 +690,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         setDepthsBufferDisplay([]);
         const statusPhrase = autoStatus === 'ok' ? 'Pass' : autoStatus === 'attention' ? 'Attention required' : 'Urgent replacement';
         setLastHeardCommand(`Depths: O:${outer} M:${middle} I:${inner} mm (${statusPhrase})`);
-        speakText(`${TYRE_META[loc].name}: Outer ${outer}, middle ${middle}, inner ${inner} recorded. Status ${statusPhrase}. Any tyre comments like a nail or damage, or say None?`);
+        speakText(`${TYRE_META[loc].spokenName || TYRE_META[loc].position}: Outer ${outer}, middle ${middle}, inner ${inner} recorded. Status ${statusPhrase}. Any tyre comments like a nail or damage, or say None?`);
     }, [saveTyreData, speakText]);
 
     const handleTyreCommentSubmit = useCallback((comment: string) => {
@@ -714,7 +714,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             goToTyre(nextIdx, 'depths');
             const nextLoc = TYRE_KEYS[nextIdx];
             const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
-            speakText(`${commentConfirm}Moving to ${TYRE_META[nextLoc].name}. Say outer, middle, and inner tread depths.`);
+            speakText(`${commentConfirm}Moving to ${TYRE_META[nextLoc].spokenName || TYRE_META[nextLoc].position}. Say outer, middle, and inner tread depths.`);
         } else {
             setMode('summary');
             modeRef.current = 'summary';
@@ -740,7 +740,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         saveTyreData(updated);
         setTyreSubStep('depths');
         setLastHeardCommand("Tread depths cleared for retake");
-        speakText(`Tread depths cleared for ${TYRE_META[loc].name}. Please dictate outer, middle, and inner depths.`);
+        speakText(`Tread depths cleared for ${TYRE_META[loc].spokenName || TYRE_META[loc].position}. Please dictate outer, middle, and inner depths.`);
     }, [saveTyreData, speakText]);
 
     const handleRetakeTyreComment = useCallback(() => {
@@ -757,7 +757,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         saveTyreData(updated);
         setTyreSubStep('comments');
         setLastHeardCommand("Comment cleared for retake");
-        speakText(`Comment cleared for ${TYRE_META[loc].name}. Dictate comments, or say None.`);
+        speakText(`Comment cleared for ${TYRE_META[loc].spokenName || TYRE_META[loc].position}. Dictate comments, or say None.`);
     }, [saveTyreData, speakText]);
 
     const handleNextTyre = useCallback(() => {
@@ -953,6 +953,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         const activeSub = tyreSubStepRef.current;
 
                         if (activeSub === 'depths') {
+                            const isJumpNSF = /\b(?:go to|jump to|select)?\s*(near\s*side\s*front|nsf|front\s*left)\b/i.test(cleaned);
+                            const isJumpOSF = /\b(?:go to|jump to|select)?\s*(off\s*side\s*front|osf|front\s*right)\b/i.test(cleaned);
+                            const isJumpNSR = /\b(?:go to|jump to|select)?\s*(near\s*side\s*rear|nsr|rear\s*left)\b/i.test(cleaned);
+                            const isJumpOSR = /\b(?:go to|jump to|select)?\s*(off\s*side\s*rear|osr|rear\s*right)\b/i.test(cleaned);
+
+                            if (isJumpNSF && currentTyreIndexRef.current !== 0) { lastCommandTimestampRef.current = now; handleJumpToTyre(0); return; }
+                            if (isJumpOSF && currentTyreIndexRef.current !== 1) { lastCommandTimestampRef.current = now; handleJumpToTyre(1); return; }
+                            if (isJumpNSR && currentTyreIndexRef.current !== 2) { lastCommandTimestampRef.current = now; handleJumpToTyre(2); return; }
+                            if (isJumpOSR && currentTyreIndexRef.current !== 3) { lastCommandTimestampRef.current = now; handleJumpToTyre(3); return; }
+
                             if (isNext) {
                                 lastCommandTimestampRef.current = now;
                                 handleNextTyre();
@@ -976,7 +986,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             if (isBack) {
                                 lastCommandTimestampRef.current = now;
                                 setTyreSubStep('depths');
-                                speakText(`Retaking tread depths for ${TYRE_META[activeLoc].name}. Say outer, middle, and inner depths.`);
+                                speakText(`Retaking tread depths for ${TYRE_META[activeLoc].spokenName || TYRE_META[activeLoc].position}. Say outer, middle, and inner depths.`);
                                 return;
                             }
                             // If user says "none", "no", "all good", "pass", "ok", "next":
@@ -1714,7 +1724,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                                 : 'bg-white border-slate-200 hover:border-slate-300'}`}
                                         >
                                             <div className="text-left">
-                                                <span className="font-black text-xs block text-slate-900">{meta.short} - {meta.name.split(' ')[0]}</span>
+                                                <span className="font-black text-xs block text-slate-900">{meta.short} - {meta.position}</span>
                                                 <span className="text-[11px] font-mono text-slate-500">
                                                     {data?.outer !== undefined ? `O:${data.outer} M:${data.middle} I:${data.inner} mm` : 'Not recorded'}
                                                 </span>

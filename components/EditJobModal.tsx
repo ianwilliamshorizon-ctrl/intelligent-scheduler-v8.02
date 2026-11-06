@@ -1077,7 +1077,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     );
     
     const tyreLocations: T.TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
-    const tyreLocationLabels: Record<T.TyreLocation, string> = { frontLeft: 'Front Left', frontRight: 'Front Right', rearLeft: 'Rear Left', rearRight: 'Rear Right', spare: 'Spare' };
+    const tyreLocationLabels: Record<T.TyreLocation, string> = { frontLeft: 'Nearside Front (NSF)', frontRight: 'Offside Front (OSF)', rearLeft: 'Nearside Rear (NSR)', rearRight: 'Offside Rear (OSR)', spare: 'Spare Tyre' };
     const statusColors: Record<T.ChecklistItemStatus, string> = { ok: 'bg-green-100 text-green-800', attention: 'bg-yellow-100 text-yellow-800', urgent: 'bg-red-100 text-red-800', na: 'bg-gray-100 text-gray-800' };
 
     if (!isOpen || !editableJob) return null;

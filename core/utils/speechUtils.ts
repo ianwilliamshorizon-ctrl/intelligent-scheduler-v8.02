@@ -78,6 +78,10 @@ export const prepareTextForSpeech = (text: string): string => {
         .replace(/^\* /gm, '') // Strip list bullets at start of lines
         .replace(/^- /gm, '') // Strip alternative list bullets
         .replace(/\bn\/?a\b/gi, 'not applicable') // Pronounce N/A cleanly
+        .replace(/\b(?:n\/s\/f|nsf)\b/gi, 'Near side Front') // Expand UK tyre abbreviations
+        .replace(/\b(?:o\/s\/f|osf)\b/gi, 'Off side Front')
+        .replace(/\b(?:n\/s\/r|nsr)\b/gi, 'Near side Rear')
+        .replace(/\b(?:o\/s\/r|osr)\b/gi, 'Off side Rear')
         .replace(/&/g, ' and ') // Pronounce &
         .replace(/(\w+)\/(\w+)/g, '$1 or $2') // Slash between words (e.g. level/condition -> level or condition)
         .replace(/\n+/g, ' ') // Convert newlines to spaces for smoother flow

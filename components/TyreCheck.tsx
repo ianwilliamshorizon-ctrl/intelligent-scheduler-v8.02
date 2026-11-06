@@ -20,11 +20,11 @@ const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color
 };
 
 const tyreLabels: Record<TyreLocation, string> = {
-    frontRight: 'Front Right (O/S/F)',
-    frontLeft: 'Front Left (N/S/F)',
-    rearRight: 'Rear Right (O/S/R)',
-    rearLeft: 'Rear Left (N/S/R)',
-    spare: 'Spare',
+    frontLeft: 'Nearside Front (NSF)',
+    frontRight: 'Offside Front (OSF)',
+    rearLeft: 'Nearside Rear (NSR)',
+    rearRight: 'Offside Rear (OSR)',
+    spare: 'Spare Tyre',
 };
 
 const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly }) => {
