@@ -81,8 +81,13 @@ class CloudSpeechSynthesis {
     cancel() {
         this.playbackSessionId++;
         if (this.currentAudio) {
-            this.currentAudio.pause();
-            this.currentAudio.currentTime = 0;
+            try {
+                this.currentAudio.pause();
+                if (this.currentAudio.src && this.currentAudio.src.startsWith('blob:')) {
+                    URL.revokeObjectURL(this.currentAudio.src);
+                }
+                this.currentAudio.currentTime = 0;
+            } catch (_) {}
             this.currentAudio = null;
         }
         this.speaking = false;
@@ -166,13 +171,42 @@ class CloudSpeechSynthesis {
                 }
 
                 const data = result.data as any;
-                this.currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
+                
+                // Create a standard Blob URL to guarantee reliable, uninterrupted streaming in Chromium
+                let audioUrl = '';
+                try {
+                    const binaryString = atob(data.audioContent);
+                    const len = binaryString.length;
+                    const bytes = new Uint8Array(len);
+                    for (let i = 0; i < len; i++) {
+                        bytes[i] = binaryString.charCodeAt(i);
+                    }
+                    const blob = new Blob([bytes], { type: 'audio/mp3' });
+                    audioUrl = URL.createObjectURL(blob);
+                } catch (_) {
+                    audioUrl = "data:audio/mp3;base64," + data.audioContent;
+                }
+
+                const audio = new Audio(audioUrl);
+                this.currentAudio = audio;
                 
                 const playPromise = new Promise<void>((resolve, reject) => {
-                    if (!this.currentAudio || this.playbackSessionId !== sessionId) return resolve();
-                    this.currentAudio.onended = () => resolve();
-                    this.currentAudio.onerror = (e) => reject(e);
-                    this.currentAudio.play().catch(reject);
+                    if (!this.currentAudio || this.playbackSessionId !== sessionId) {
+                        if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
+                        return resolve();
+                    }
+                    audio.onended = () => {
+                        if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
+                        resolve();
+                    };
+                    audio.onerror = (e) => {
+                        if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
+                        reject(e);
+                    };
+                    audio.play().catch(err => {
+                        if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
+                        reject(err);
+                    });
                 });
 
                 await playPromise;

@@ -65,14 +65,23 @@ export const prepareTextForSpeech = (text: string): string => {
     
     return text
         .replace(/```[\s\S]*?```/g, ' ') // Remove code blocks
-        .replace(/\|.*?\|/g, ' ')       // Remove table rows
-        .replace(/<[^>]*>?/gm, '')      // Strip HTML tags
-        .replace(/\*\*/g, '')           // Strip bold markers
-        .replace(/\*/g, '')             // Strip bullet markers
-        .replace(/#/g, '')              // Strip headers
-        .replace(/^\* /gm, '')          // Strip list bullets at start of lines
-        .replace(/^- /gm, '')           // Strip alternative list bullets
-        .replace(/\n+/g, ' ')           // Convert newlines to spaces for smoother flow
+        .replace(/<\/?[a-zA-Z][^>]*>/g, ' ') // Safely strip actual HTML tags (e.g. <span>, <div>, <br>)
+        .replace(/<=\s*(\d+)/g, 'less than or equal to $1') // Handle <=
+        .replace(/>=\s*(\d+)/g, 'greater than or equal to $1') // Handle >=
+        .replace(/<\s*(\d+)/g, 'less than $1') // Handle < (e.g. < 3mm)
+        .replace(/>\s*(\d+)/g, 'greater than $1') // Handle >
+        .replace(/<[^>]*>/g, ' ') // Catch any remaining complete tags
+        .replace(/\|/g, ', ') // Convert table delimiters / pipes to pauses instead of stripping
+        .replace(/\*\*/g, '') // Strip bold markers
+        .replace(/\*/g, '') // Strip bullet markers
+        .replace(/#/g, '') // Strip headers
+        .replace(/^\* /gm, '') // Strip list bullets at start of lines
+        .replace(/^- /gm, '') // Strip alternative list bullets
+        .replace(/\bn\/?a\b/gi, 'not applicable') // Pronounce N/A cleanly
+        .replace(/&/g, ' and ') // Pronounce &
+        .replace(/(\w+)\/(\w+)/g, '$1 or $2') // Slash between words (e.g. level/condition -> level or condition)
+        .replace(/\n+/g, ' ') // Convert newlines to spaces for smoother flow
         .replace(/(\d+)\.(\d+)/g, '$1 point $2') // Read decimals naturally (4.8 -> 4 point 8)
+        .replace(/\s+/g, ' ')
         .trim();
 };

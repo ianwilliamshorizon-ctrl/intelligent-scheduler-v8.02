@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ChecklistSection, ChecklistItemStatus } from '../types';
-import { 
-    X, Check, AlertTriangle, XCircle, HelpCircle, Camera, 
+import {
+    X, Check, AlertTriangle, XCircle, HelpCircle, Camera,
     ArrowRight, ArrowLeft, Pause, Sparkles, CheckCircle2, ListFilter,
     Volume2, VolumeX, Mic, MicOff, RotateCcw, AlertCircle, RefreshCw
 } from 'lucide-react';
@@ -90,7 +90,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     return parsed;
                 }
             }
-        } catch (_) {}
+        } catch (_) { }
 
         // 2. Otherwise find the first step that has not been recorded
         const firstUnrecorded = initialSteps.findIndex(s => {
@@ -126,6 +126,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const lastSpokenTextRef = useRef<string>('');
     const lastSpokenTimeRef = useRef<number>(0);
     const hasInitialSpokenRef = useRef<boolean>(false);
+    const isSpeakingRef = useRef<boolean>(false);
+    const safetyTimerRef = useRef<any>(null);
+    const lastSpeechEndTimeRef = useRef<number>(0);
 
     // Keep refs in sync with current state
     useEffect(() => {
@@ -144,7 +147,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const saveProgress = useCallback((stepIdx: number) => {
         try {
             localStorage.setItem(storageKey, stepIdx.toString());
-        } catch (_) {}
+        } catch (_) { }
     }, [storageKey]);
 
     // Check Web Speech API support
@@ -160,7 +163,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             items: section.items.map(item => {
                 const found = currentStepsState.find(s => s.sectionId === section.id && s.itemId === item.id);
                 if (found) {
-                    const extraComment = found.photoRequired 
+                    const extraComment = found.photoRequired
                         ? `${found.comment ? `${found.comment} | ` : ''}[Photo Required: ${found.photoNotes || 'Yes'}]`
                         : found.comment;
                     return {
@@ -192,12 +195,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         try {
             cloudSpeechSynthesis.cancel();
+            isSpeakingRef.current = true;
             setIsSpeaking(true);
             lastBotUtteranceRef.current = text.toLowerCase();
 
+            if (safetyTimerRef.current) {
+                clearTimeout(safetyTimerRef.current);
+                safetyTimerRef.current = null;
+            }
+
             const cleaned = prepareTextForSpeech(text);
             const utterance = new CloudSpeechSynthesisUtterance(cleaned);
-            
+
             const voices = cloudSpeechSynthesis.getVoices();
             const preferredVoice = findBestVoice(voices, { lang: 'en-GB', gender: 'female' });
             if (preferredVoice) {
@@ -206,6 +215,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             utterance.lang = 'en-GB';
 
             const finishSpeaking = () => {
+                if (safetyTimerRef.current) {
+                    clearTimeout(safetyTimerRef.current);
+                    safetyTimerRef.current = null;
+                }
+                isSpeakingRef.current = false;
+                lastSpeechEndTimeRef.current = Date.now();
                 setIsSpeaking(false);
                 onDone?.();
             };
@@ -218,14 +233,21 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 finishSpeaking();
             };
 
-            // Safety timeout to avoid getting stuck in isSpeaking state
-            setTimeout(() => {
-                setIsSpeaking(false);
-            }, 8000);
+            // Dynamic safety timeout proportional to length (at least 15s) to avoid getting stuck
+            const dynamicTimeoutMs = Math.max(15000, cleaned.length * 150);
+            safetyTimerRef.current = setTimeout(() => {
+                finishSpeaking();
+            }, dynamicTimeoutMs);
 
             cloudSpeechSynthesis.speak(utterance);
         } catch (err) {
             console.error('Failed to speak text:', err);
+            if (safetyTimerRef.current) {
+                clearTimeout(safetyTimerRef.current);
+                safetyTimerRef.current = null;
+            }
+            isSpeakingRef.current = false;
+            lastSpeechEndTimeRef.current = Date.now();
             setIsSpeaking(false);
             onDone?.();
         }
@@ -267,10 +289,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         syncToParent(updated);
         saveProgress(stepIdx);
 
-        const statusLabel = 
-            status === 'ok' ? 'Pass' : 
-            status === 'attention' ? 'Attention' : 
-            status === 'urgent' ? 'Urgent' : 'N A';
+        const statusLabel =
+            status === 'ok' ? 'Pass' :
+                status === 'attention' ? 'Attention' :
+                    status === 'urgent' ? 'Urgent' : 'N A';
 
         setLastHeardCommand(`Marked: ${statusLabel}`);
 
@@ -444,11 +466,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     // Pause & Save handler
     const handlePauseAndSave = useCallback(() => {
+        if (safetyTimerRef.current) {
+            clearTimeout(safetyTimerRef.current);
+            safetyTimerRef.current = null;
+        }
+        isSpeakingRef.current = false;
         cloudSpeechSynthesis.cancel();
         if (recognitionRef.current) {
             try {
                 recognitionRef.current.stop();
-            } catch (_) {}
+            } catch (_) { }
         }
         saveProgress(currentStepIndexRef.current);
         syncToParent(stepsRef.current);
@@ -477,7 +504,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         if (recognitionRef.current) {
             try {
                 recognitionRef.current.abort();
-            } catch (_) {}
+            } catch (_) { }
             recognitionRef.current = null;
         }
 
@@ -501,8 +528,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const cleaned = normalizeSpeechText(rawTranscript);
                     setLiveTranscript(rawTranscript);
 
-                    // Prevent rapid double triggers within 600ms
                     const now = Date.now();
+
+                    // CRITICAL: Suppress command matching while the host is speaking or during the 400ms room echo settling window.
+                    // This prevents the host's own voice from being heard through the microphone, which was cutting off / truncating the speech in mid-sentence.
+                    if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 400)) {
+                        continue;
+                    }
+
+                    // Prevent rapid double triggers within 600ms
                     if (now - lastCommandTimestampRef.current < 600) {
                         continue;
                     }
@@ -527,6 +561,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     // Interrupt TTS if a definitive command is spoken
                     if (isOk || isAttention || isUrgent || isNa || isRetake || isResetFinding || isPhotoYes || isPhotoNo || isNext || isBack || isRepeat || isPause) {
                         cloudSpeechSynthesis.cancel();
+                        isSpeakingRef.current = false;
                         setIsSpeaking(false);
                     }
 
@@ -625,7 +660,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             const existing = stepsRef.current[stepIdx]?.comment || '';
                             const newComment = existing ? `${existing} ${rawTranscript}` : rawTranscript;
                             setLastHeardCommand(`Dictated: "${rawTranscript}"`);
-                            
+
                             const updated = [...stepsRef.current];
                             updated[stepIdx] = {
                                 ...updated[stepIdx],
@@ -658,7 +693,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             const existing = stepsRef.current[stepIdx]?.photoNotes || '';
                             const newNotes = existing ? `${existing} ${rawTranscript}` : rawTranscript;
                             setLastHeardCommand(`Dictated: "${rawTranscript}"`);
-                            
+
                             const updated = [...stepsRef.current];
                             updated[stepIdx] = {
                                 ...updated[stepIdx],
@@ -692,7 +727,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         if (!isManuallyStoppedRef.current && isOpen) {
                             try {
                                 recognition.start();
-                            } catch (_) {}
+                            } catch (_) { }
                         }
                     }, 200);
                 }
@@ -732,7 +767,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             if (recognitionRef.current) {
                 try {
                     recognitionRef.current.stop();
-                } catch (_) {}
+                } catch (_) { }
             }
         } else {
             isManuallyStoppedRef.current = false;
@@ -750,11 +785,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         return () => {
             isManuallyStoppedRef.current = true;
+            if (safetyTimerRef.current) {
+                clearTimeout(safetyTimerRef.current);
+                safetyTimerRef.current = null;
+            }
+            isSpeakingRef.current = false;
             cloudSpeechSynthesis.cancel();
             if (recognitionRef.current) {
                 try {
                     recognitionRef.current.abort();
-                } catch (_) {}
+                } catch (_) { }
             }
         };
     }, [isOpen]);
@@ -763,6 +803,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     useEffect(() => {
         if (!isOpen) {
             hasInitialSpokenRef.current = false;
+            if (safetyTimerRef.current) {
+                clearTimeout(safetyTimerRef.current);
+                safetyTimerRef.current = null;
+            }
+            isSpeakingRef.current = false;
             cloudSpeechSynthesis.cancel();
             return;
         }
@@ -825,11 +870,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 }
                                 setIsTtsEnabled(!isTtsEnabled);
                             }}
-                            className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
-                                isTtsEnabled 
-                                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/30' 
+                            className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${isTtsEnabled
+                                    ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 hover:bg-indigo-500/30'
                                     : 'bg-white/10 text-slate-400 hover:text-white'
-                            }`}
+                                }`}
                             title={isTtsEnabled ? 'Mute Voice Prompts' : 'Enable Voice Prompts'}
                         >
                             {isTtsEnabled ? <Volume2 size={16} /> : <VolumeX size={16} />}
@@ -841,11 +885,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             <button
                                 type="button"
                                 onClick={handleToggleVoiceControl}
-                                className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${
-                                    isVoiceControlActive && isListening
-                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30' 
+                                className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${isVoiceControlActive && isListening
+                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30'
                                         : 'bg-white/10 text-slate-400 hover:text-white'
-                                }`}
+                                    }`}
                                 title={isVoiceControlActive ? 'Pause Hands-Free Voice' : 'Resume Hands-Free Voice'}
                             >
                                 {isVoiceControlActive && isListening ? <Mic size={16} className="text-emerald-400 animate-pulse" /> : <MicOff size={16} />}
@@ -866,7 +909,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                 {/* Progress Bar & Status Line */}
                 <div className="w-full bg-slate-100 h-2">
-                    <div 
+                    <div
                         className="bg-indigo-600 h-2 transition-all duration-300"
                         style={{ width: `${((currentStepIndex + 1) / totalSteps) * 100}%` }}
                     />
@@ -896,7 +939,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         {isSpeaking ? (
                             <div className="flex items-center gap-2 text-indigo-400 font-bold animate-pulse">
                                 <Volume2 size={15} />
-                                <span>Host speaking... (you can speak anytime to interrupt)</span>
+                                <span>Host speaking...</span>
                             </div>
                         ) : isVoiceControlActive && isListening ? (
                             <div className="flex items-center gap-2 text-emerald-400 font-bold truncate">
@@ -910,13 +953,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     </span>
                                 ) : (
                                     <span className="truncate">
-                                        {subStep === 'findingNotes' 
+                                        {subStep === 'findingNotes'
                                             ? 'Listening for observations... Speak notes, or say "Done" / "Retake"'
                                             : subStep === 'photoPrompt'
-                                            ? 'Listening... Say "Yes" or "No" for photo'
-                                            : subStep === 'photoNotes'
-                                            ? 'Listening for photo details... Say notes, or "Done" / "Retake"'
-                                            : 'Listening... Say "OK", "Attention", "Urgent", or "Next"'}
+                                                ? 'Listening... Say "Yes" or "No" for photo'
+                                                : subStep === 'photoNotes'
+                                                    ? 'Listening for photo details... Say notes, or "Done" / "Retake"'
+                                                    : 'Listening... Say "OK", "Attention", "Urgent", or "Next"'}
                                     </span>
                                 )}
                             </div>
@@ -967,9 +1010,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 {voiceError && !needsMicPermission && (
                     <div className="bg-amber-50 text-amber-900 px-4 py-1.5 text-xs font-semibold border-b border-amber-200 flex items-center justify-between">
                         <span>⚠️ {voiceError}</span>
-                        <button 
-                            type="button" 
-                            onClick={() => setVoiceError(null)} 
+                        <button
+                            type="button"
+                            onClick={() => setVoiceError(null)}
                             className="text-amber-700 hover:text-amber-950 underline font-bold ml-2 cursor-pointer"
                         >
                             Dismiss
@@ -1018,11 +1061,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('ok')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
-                                        currentStep.status === 'ok'
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'ok'
                                             ? 'bg-emerald-500 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300'
                                             : 'bg-white hover:bg-emerald-50 text-emerald-800 border-slate-200 hover:border-emerald-300'
-                                    }`}
+                                        }`}
                                 >
                                     <Check size={18} />
                                     <span>OK / Pass</span>
@@ -1030,11 +1072,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('attention')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
-                                        currentStep.status === 'attention'
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'attention'
                                             ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300'
                                             : 'bg-white hover:bg-amber-50 text-amber-800 border-slate-200 hover:border-amber-300'
-                                    }`}
+                                        }`}
                                 >
                                     <AlertTriangle size={18} />
                                     <span>Attention</span>
@@ -1042,11 +1083,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('urgent')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
-                                        currentStep.status === 'urgent'
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'urgent'
                                             ? 'bg-red-500 text-white border-red-600 shadow-md ring-2 ring-red-300'
                                             : 'bg-white hover:bg-red-50 text-red-800 border-slate-200 hover:border-red-300'
-                                    }`}
+                                        }`}
                                 >
                                     <XCircle size={18} />
                                     <span>Urgent</span>
@@ -1054,11 +1094,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('na')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${
-                                        currentStep.status === 'na'
+                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'na'
                                             ? 'bg-slate-500 text-white border-slate-600 shadow-md ring-2 ring-slate-300'
                                             : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300'
-                                    }`}
+                                        }`}
                                 >
                                     <HelpCircle size={18} />
                                     <span>N/A</span>
@@ -1080,7 +1119,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                         placeholder="Add specific observations, wear levels, or defect details..."
                                         className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
                                     />
-                                    <SpeechToTextButton 
+                                    <SpeechToTextButton
                                         onTranscript={text => handleCommentChange(currentStep.comment ? `${currentStep.comment} ${text}` : text)}
                                     />
                                 </div>
@@ -1090,15 +1129,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                     {/* Step: Finding Observation Notes Sub-Step for Attention & Urgent */}
                     {subStep === 'findingNotes' && (
-                        <div className={`p-4 rounded-2xl border-2 space-y-3.5 animate-fade-in shadow-sm ${
-                            currentStep.status === 'urgent' 
-                                ? 'bg-red-50 border-red-300' 
+                        <div className={`p-4 rounded-2xl border-2 space-y-3.5 animate-fade-in shadow-sm ${currentStep.status === 'urgent'
+                                ? 'bg-red-50 border-red-300'
                                 : 'bg-amber-50 border-amber-300'
-                        }`}>
+                            }`}>
                             <div className="flex items-center justify-between">
-                                <div className={`flex items-center gap-2 font-black text-xs uppercase tracking-wide ${
-                                    currentStep.status === 'urgent' ? 'text-red-900' : 'text-amber-900'
-                                }`}>
+                                <div className={`flex items-center gap-2 font-black text-xs uppercase tracking-wide ${currentStep.status === 'urgent' ? 'text-red-900' : 'text-amber-900'
+                                    }`}>
                                     {currentStep.status === 'urgent' ? (
                                         <XCircle size={18} className="text-red-600" />
                                     ) : (
@@ -1130,18 +1167,17 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                             ? "Describe urgent issue (e.g. OSF brake pad metal-to-metal, severe coolant leak)..."
                                             : "Describe condition (e.g. inner pad 3mm, slight play in ball joint)..."
                                     }
-                                    className={`flex-1 px-3.5 py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-semibold outline-none focus:ring-2 shadow-xs ${
-                                        currentStep.status === 'urgent' 
-                                            ? 'border-red-300 focus:ring-red-500 text-red-950' 
+                                    className={`flex-1 px-3.5 py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-semibold outline-none focus:ring-2 shadow-xs ${currentStep.status === 'urgent'
+                                            ? 'border-red-300 focus:ring-red-500 text-red-950'
                                             : 'border-amber-300 focus:ring-amber-500 text-amber-950'
-                                    }`}
+                                        }`}
                                     onKeyDown={e => {
                                         if (e.key === 'Enter') {
                                             handleFindingNotesSubmit(currentStep.comment || '');
                                         }
                                     }}
                                 />
-                                <SpeechToTextButton 
+                                <SpeechToTextButton
                                     onTranscript={text => {
                                         const existing = currentStep.comment || '';
                                         const updated = existing ? `${existing} ${text}` : text;
@@ -1151,9 +1187,8 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             </div>
 
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
-                                <span className={`text-[11px] font-medium ${
-                                    currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
-                                }`}>
+                                <span className={`text-[11px] font-medium ${currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
+                                    }`}>
                                     🎙️ Speak your observations now. If misheard, say &ldquo;Retake&rdquo; or click Retake Note.
                                 </span>
                                 <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
@@ -1171,11 +1206,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => handleFindingNotesSubmit(currentStep.comment || '')}
-                                        className={`px-4 py-2 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${
-                                            currentStep.status === 'urgent' 
-                                                ? 'bg-red-600 hover:bg-red-700' 
+                                        className={`px-4 py-2 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${currentStep.status === 'urgent'
+                                                ? 'bg-red-600 hover:bg-red-700'
                                                 : 'bg-amber-600 hover:bg-amber-700'
-                                        }`}
+                                            }`}
                                     >
                                         <span>Save Notes & Check Photo</span>
                                         <ArrowRight size={14} />
@@ -1307,11 +1341,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 divide-y divide-slate-100">
                             {steps.map((st, i) => {
                                 return (
-                                    <div 
+                                    <div
                                         key={st.itemId}
-                                        className={`pt-1.5 flex items-start justify-between gap-2 text-xs transition ${
-                                            i === currentStepIndex ? 'bg-indigo-50/70 p-2 rounded-lg font-bold text-indigo-950' : 'text-slate-700'
-                                        }`}
+                                        className={`pt-1.5 flex items-start justify-between gap-2 text-xs transition ${i === currentStepIndex ? 'bg-indigo-50/70 p-2 rounded-lg font-bold text-indigo-950' : 'text-slate-700'
+                                            }`}
                                     >
                                         <div className="flex items-start gap-2 flex-1">
                                             <span className="font-mono text-slate-400 text-[11px] mt-0.5">#{i + 1}</span>
@@ -1326,12 +1359,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                             </div>
                                         </div>
                                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
-                                                st.status === 'ok' ? 'bg-emerald-100 text-emerald-800' :
-                                                st.status === 'attention' ? 'bg-amber-100 text-amber-800' :
-                                                st.status === 'urgent' ? 'bg-red-100 text-red-800' :
-                                                'bg-slate-100 text-slate-500'
-                                            }`}>
+                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${st.status === 'ok' ? 'bg-emerald-100 text-emerald-800' :
+                                                    st.status === 'attention' ? 'bg-amber-100 text-amber-800' :
+                                                        st.status === 'urgent' ? 'bg-red-100 text-red-800' :
+                                                            'bg-slate-100 text-slate-500'
+                                                }`}>
                                                 {st.status.toUpperCase()}
                                             </span>
                                             <button
