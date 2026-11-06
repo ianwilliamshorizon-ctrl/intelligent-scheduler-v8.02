@@ -123,6 +123,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const stepsRef = useRef<FlatInspectionStep[]>(initialSteps);
     const lastBotUtteranceRef = useRef<string>('');
     const lastCommandTimestampRef = useRef<number>(0);
+    const lastSpokenTextRef = useRef<string>('');
+    const lastSpokenTimeRef = useRef<number>(0);
+    const hasInitialSpokenRef = useRef<boolean>(false);
 
     // Keep refs in sync with current state
     useEffect(() => {
@@ -172,12 +175,20 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         onChecklistUpdate(updated);
     }, [checklistData, onChecklistUpdate]);
 
-    // Text-to-Speech speaking function
+    // Text-to-Speech speaking function with strict deduplication
     const speakText = useCallback((text: string, onDone?: () => void) => {
         if (!isTtsEnabled) {
             onDone?.();
             return;
         }
+
+        // Prevent duplicate immediate triggers of the exact same text within 1500ms
+        const now = Date.now();
+        if (lastSpokenTextRef.current === text && now - lastSpokenTimeRef.current < 1500) {
+            return;
+        }
+        lastSpokenTextRef.current = text;
+        lastSpokenTimeRef.current = now;
 
         try {
             cloudSpeechSynthesis.cancel();
@@ -748,23 +759,32 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
     }, [isOpen]);
 
-    // On modal open: pick up from where left off (resume point)
+    // On modal open: pick up from where left off (resume point) - executes ONCE on open
     useEffect(() => {
-        if (isOpen && steps.length > 0) {
-            const resumeIdx = getInitialResumeIndex();
-            setCurrentStepIndex(resumeIdx);
-            setSubStep('answer');
-            const timer = setTimeout(() => {
-                if (resumeIdx > 0) {
-                    const step = stepsRef.current[resumeIdx];
-                    speakText(`Resuming inspection at question ${resumeIdx + 1}. ${step?.sectionTitle || ''}. ${step?.itemLabel || ''}.`);
-                } else {
-                    readCurrentStep(0);
-                }
-            }, 600);
-            return () => clearTimeout(timer);
+        if (!isOpen) {
+            hasInitialSpokenRef.current = false;
+            cloudSpeechSynthesis.cancel();
+            return;
         }
-    }, [isOpen, getInitialResumeIndex, readCurrentStep, speakText, steps.length]);
+
+        if (hasInitialSpokenRef.current) return;
+        hasInitialSpokenRef.current = true;
+
+        const resumeIdx = getInitialResumeIndex();
+        setCurrentStepIndex(resumeIdx);
+        setSubStep('answer');
+
+        const timer = setTimeout(() => {
+            if (resumeIdx > 0) {
+                const step = stepsRef.current[resumeIdx];
+                speakText(`Resuming inspection at question ${resumeIdx + 1}. ${step?.sectionTitle || ''}. ${step?.itemLabel || ''}.`);
+            } else {
+                readCurrentStep(0);
+            }
+        }, 500);
+
+        return () => clearTimeout(timer);
+    }, [isOpen]);
 
     if (!isOpen || steps.length === 0) return null;
 

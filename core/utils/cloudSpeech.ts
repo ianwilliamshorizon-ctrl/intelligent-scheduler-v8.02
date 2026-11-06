@@ -72,12 +72,14 @@ class CloudSpeechSynthesis {
     
     private currentAudio: HTMLAudioElement | null = null;
     private currentUtterance: CloudSpeechSynthesisUtterance | null = null;
+    private playbackSessionId = 0;
 
     getVoices() {
         return CLOUD_VOICES as any;
     }
 
     cancel() {
+        this.playbackSessionId++;
         if (this.currentAudio) {
             this.currentAudio.pause();
             this.currentAudio.currentTime = 0;
@@ -92,6 +94,7 @@ class CloudSpeechSynthesis {
 
     async speak(utterance: CloudSpeechSynthesisUtterance) {
         this.cancel();
+        const sessionId = ++this.playbackSessionId;
         this.speaking = true;
         this.currentUtterance = utterance;
         
@@ -132,8 +135,7 @@ class CloudSpeechSynthesis {
             const selectedVoice = utterance.voice?.name ? voiceMap[utterance.voice.name] : { name: 'en-GB-Neural2-A', lang: 'en-GB' };
             const effectiveVoice = selectedVoice || { name: 'en-GB-Neural2-A', lang: 'en-GB' };
 
-            // Split text into manageable chunks (approx 4000 characters to be safe, though 5000 is the limit)
-            // We'll split by sentence to avoid mid-sentence breaks
+            // Split text into manageable chunks
             const chunks = utterance.text.match(/[^.!?]+[.!?]+|\s*[^.!?]+/g) || [utterance.text];
             
             // Re-group chunks into segments under 4000 chars
@@ -150,7 +152,7 @@ class CloudSpeechSynthesis {
             if (currentSegment) segments.push(currentSegment.trim());
 
             for (const segment of segments) {
-                if (!this.speaking) break; // Check if cancelled
+                if (!this.speaking || this.playbackSessionId !== sessionId) break;
 
                 const result = await synthesizeCloudSpeechCallable({ 
                     text: segment, 
@@ -158,11 +160,16 @@ class CloudSpeechSynthesis {
                     languageCode: effectiveVoice.lang 
                 });
                 
+                // If cancelled while network request was in-flight, do not play
+                if (!this.speaking || this.playbackSessionId !== sessionId) {
+                    return;
+                }
+
                 const data = result.data as any;
                 this.currentAudio = new Audio("data:audio/mp3;base64," + data.audioContent);
                 
                 const playPromise = new Promise<void>((resolve, reject) => {
-                    if (!this.currentAudio) return resolve();
+                    if (!this.currentAudio || this.playbackSessionId !== sessionId) return resolve();
                     this.currentAudio.onended = () => resolve();
                     this.currentAudio.onerror = (e) => reject(e);
                     this.currentAudio.play().catch(reject);
@@ -171,13 +178,17 @@ class CloudSpeechSynthesis {
                 await playPromise;
             }
 
-            this.speaking = false;
-            if (utterance.onend) utterance.onend(new Event('end'));
+            if (this.playbackSessionId === sessionId) {
+                this.speaking = false;
+                if (utterance.onend) utterance.onend(new Event('end'));
+            }
 
         } catch (e: any) {
-            console.error("Cloud TTS Error:", e);
-            this.speaking = false;
-            if (utterance.onerror) utterance.onerror({ error: 'synthesis-failed', originalError: e } as any);
+            if (this.playbackSessionId === sessionId) {
+                console.error("Cloud TTS Error:", e);
+                this.speaking = false;
+                if (utterance.onerror) utterance.onerror({ error: 'synthesis-failed', originalError: e } as any);
+            }
         }
     }
 }
