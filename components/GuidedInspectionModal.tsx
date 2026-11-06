@@ -70,30 +70,45 @@ export const evaluateTyreStatus = (outer?: number, middle?: number, inner?: numb
 };
 
 // Spoken numbers extractor for tyre tread depths
-export const parseSpokenDepths = (rawText: string): { outer: number; middle: number; inner: number } | null => {
+export const parseSpokenDepths = (rawText: string, isFinal: boolean = false): { outer: number; middle: number; inner: number } | null => {
     let t = rawText.toLowerCase();
     const wordDigits: Record<string, string> = {
         zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5',
         six: '6', seven: '7', eight: '8', nine: '9', ten: '10'
     };
     for (const [w, digit] of Object.entries(wordDigits)) {
-        t = t.replace(new RegExp(`\b${w}\b`, 'g'), digit);
+        t = t.replace(new RegExp(`\\b${w}\\b`, 'gi'), digit);
     }
-    t = t.replace(/(\d+)\s*point\s*(\d+)/g, '$1.$2');
+    t = t.replace(/(\d+)\s*point\s*(\d+)/gi, '$1.$2');
 
     const matches = t.match(/\d+(?:\.\d+)?/g);
     if (!matches || matches.length === 0) return null;
 
     const nums = matches.map(Number).filter(n => !isNaN(n) && n >= 0 && n <= 35);
+    if (nums.length === 0) return null;
+
+    // 1. If 3 or more numbers provided (e.g. "4, 3, 2" or "5.5, 5, 4.5"): outer, middle, inner
     if (nums.length >= 3) {
         return { outer: nums[0], middle: nums[1], inner: nums[2] };
     }
-    if (nums.length === 1) {
+
+    // 2. Explicit keyword stating all depths are the same (e.g. "all 4", "4 across", "even 5")
+    const isAllAcross = /\b(across|all|even|same|round|flat)\b/i.test(t);
+    if (nums.length === 1 && isAllAcross) {
         return { outer: nums[0], middle: nums[0], inner: nums[0] };
     }
-    if (nums.length === 2) {
-        return { outer: nums[0], middle: nums[0], inner: nums[1] };
+
+    // 3. If speech engine has finalized and user has finished talking
+    if (isFinal) {
+        if (nums.length === 1) {
+            return { outer: nums[0], middle: nums[0], inner: nums[0] };
+        }
+        if (nums.length === 2) {
+            return { outer: nums[0], middle: nums[0], inner: nums[1] };
+        }
     }
+
+    // While still in-flight / interim and fewer than 3 numbers, wait for user to finish saying all 3!
     return null;
 };
 
@@ -873,7 +888,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 return;
                             }
                             // Try parsing 3 depths or single depth across
-                            const parsed = parseSpokenDepths(cleaned);
+                            const parsed = parseSpokenDepths(cleaned, result.isFinal);
                             if (parsed) {
                                 lastCommandTimestampRef.current = now;
                                 handleTyreDepthsSubmit(parsed.outer, parsed.middle, parsed.inner);
