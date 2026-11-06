@@ -76,6 +76,8 @@ export const parseSpokenDepths = (
     existingBuffer: number[] = []
 ): { result: { outer: number; middle: number; inner: number } | null; newBuffer: number[] } => {
     let t = rawText.toLowerCase();
+
+    // 1. Spoken digit words to numbers (zero through ten)
     const wordDigits: Record<string, string> = {
         zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5',
         six: '6', seven: '7', eight: '8', nine: '9', ten: '10'
@@ -83,14 +85,28 @@ export const parseSpokenDepths = (
     for (const [w, digit] of Object.entries(wordDigits)) {
         t = t.replace(new RegExp(`\\b${w}\\b`, 'gi'), digit);
     }
-    t = t.replace(/(\d+)\s*point\s*(\d+)/gi, '$1.$2');
 
+    // 2. Fractions like "4 and a half" or "4 & a half" -> 4.5
+    t = t.replace(/(\d+(?:\.\d+)?)\s*(?:and|&)\s*(?:a\s+)?half\b/gi, (_, n) => `${parseFloat(n) + 0.5}`);
+    // Standalone "half" or "a half" -> 0.5
+    t = t.replace(/\b(?:a\s+half|half)\b/gi, '0.5');
+
+    // 3. Spoken decimals: "4 point 5", "4 dot 5" -> 4.5
+    t = t.replace(/(\d+)\s*(?:point|dot)\s*(\d+)/gi, '$1.$2');
+    // Leading point: "point 5", "dot 5" -> 0.5
+    t = t.replace(/\b(?:point|dot)\s*(\d+)/gi, '0.$1');
+
+    // 4. Extract all valid float numbers (0 to 35 mm)
     const matches = t.match(/\d+(?:\.\d+)?/g);
     if (!matches || matches.length === 0) {
         return { result: null, newBuffer: existingBuffer };
     }
 
-    const nums = matches.map(Number).filter(n => !isNaN(n) && n >= 0 && n <= 35);
+    const nums = matches
+        .map(Number)
+        .filter(n => !isNaN(n) && n >= 0 && n <= 35)
+        .map(n => Math.round(n * 10) / 10);
+
     if (nums.length === 0) {
         return { result: null, newBuffer: existingBuffer };
     }
@@ -104,7 +120,7 @@ export const parseSpokenDepths = (
         };
     }
 
-    // Case A: 3 or more numbers provided in one phrase (e.g. "4, 3, 2" or "5.5 5 4.5")
+    // Case A: 3 or more numbers provided in one phrase (e.g. "4.5, 4, 3.5" or "5.5 5 4.5")
     if (nums.length >= 3) {
         return {
             result: { outer: nums[0], middle: nums[1], inner: nums[2] },
@@ -813,7 +829,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             .toLowerCase()
             .replace(/o\.k\./gi, 'ok')
             .replace(/o\.k/gi, 'ok')
+            // Preserve decimal numbers (e.g. 4.5 -> 4xdotx5)
+            .replace(/(\d+)\s*\.\s*(\d+)/g, '$1xdotx$2')
+            // Remove punctuation other than alphanumeric and whitespace
             .replace(/[^a-z0-9\s]/g, ' ')
+            // Restore decimal point
+            .replace(/xdotx/g, '.')
             .replace(/\s+/g, ' ')
             .trim();
     };
@@ -943,7 +964,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 return;
                             }
                             // Try parsing 3 depths or single depth across
-                            const { result: parsedResult, newBuffer } = parseSpokenDepths(cleaned, result.isFinal, depthsBufferRef.current);
+                            const { result: parsedResult, newBuffer } = parseSpokenDepths(rawTranscript, result.isFinal, depthsBufferRef.current);
                             depthsBufferRef.current = newBuffer;
                             setDepthsBufferDisplay(newBuffer);
                             if (parsedResult) {
@@ -1725,6 +1746,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     </button>
                                 </div>
 
+                                {depthsBufferDisplay.length > 0 && tyreSubStep === 'depths' && (
+                                    <div className="mb-2 p-2 bg-indigo-50 border border-indigo-200 rounded-lg flex items-center justify-between text-xs text-indigo-800">
+                                        <span className="font-semibold flex items-center gap-1.5">
+                                            <span className="w-2 h-2 rounded-full bg-indigo-600 animate-pulse"></span>
+                                            {depthsBufferDisplay.length === 1 && `Recorded Outer: ${depthsBufferDisplay[0]} mm. Say Middle depth (e.g. 4.5)...`}
+                                            {depthsBufferDisplay.length === 2 && `Recorded Outer: ${depthsBufferDisplay[0]} mm, Middle: ${depthsBufferDisplay[1]} mm. Say Inner depth...`}
+                                        </span>
+                                        <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-white px-2 py-0.5 rounded shadow-xs border border-indigo-100">
+                                            {depthsBufferDisplay.length} of 3 recorded
+                                        </span>
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
                                     <div>
                                         <span className="text-[11px] font-bold text-slate-500 block mb-1 text-center">Outer Edge</span>
