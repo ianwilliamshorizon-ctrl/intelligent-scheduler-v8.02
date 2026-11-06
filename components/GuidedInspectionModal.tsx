@@ -3,7 +3,7 @@ import { ChecklistSection, ChecklistItemStatus } from '../types';
 import { 
     X, Check, AlertTriangle, XCircle, HelpCircle, Camera, 
     ArrowRight, ArrowLeft, Pause, Sparkles, CheckCircle2, ListFilter,
-    Volume2, VolumeX, Mic, MicOff, RotateCcw, AlertCircle
+    Volume2, VolumeX, Mic, MicOff, RotateCcw, AlertCircle, RefreshCw
 } from 'lucide-react';
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
@@ -39,25 +39,66 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     vehicleRegistration,
     vehicleModel
 }) => {
+    // Unique storage key based on registration or checklist id to persist progress
+    const storageKey = useMemo(() => {
+        const reg = (vehicleRegistration || '').trim().toUpperCase();
+        const model = (vehicleModel || '').trim().toLowerCase();
+        const firstId = checklistData[0]?.id || 'chk';
+        return `guided_inspection_progress_${reg || model || firstId}`;
+    }, [vehicleRegistration, vehicleModel, checklistData]);
+
     // Flatten all sections into a sequential list of steps
     const initialSteps = useMemo(() => {
         const steps: FlatInspectionStep[] = [];
         (checklistData || []).forEach(section => {
             (section.items || []).forEach(item => {
+                const photoReq = (item.comment || '').includes('[Photo Required');
+                let cleanComment = item.comment || '';
+                let photoNotes = '';
+                if (photoReq) {
+                    const match = cleanComment.match(/\[Photo Required:\s*([^\]]*)\]/);
+                    if (match) {
+                        photoNotes = match[1] === 'Yes' ? '' : match[1];
+                    }
+                    cleanComment = cleanComment.replace(/\|?\s*\[Photo Required:[^\]]*\]/g, '').trim();
+                }
                 steps.push({
                     sectionId: section.id,
                     sectionTitle: section.title,
                     itemId: item.id,
                     itemLabel: item.label,
                     status: item.status || 'na',
-                    comment: item.comment || '',
-                    photoRequired: false,
-                    photoNotes: ''
+                    comment: cleanComment,
+                    photoRequired: photoReq,
+                    photoNotes: photoNotes
                 });
             });
         });
         return steps;
     }, [checklistData]);
+
+    // Calculate initial resume index (either from saved progress or first unrecorded item)
+    const getInitialResumeIndex = useCallback(() => {
+        if (!initialSteps || initialSteps.length === 0) return 0;
+
+        // 1. Check if there is a saved step in localStorage
+        try {
+            const saved = localStorage.getItem(storageKey);
+            if (saved !== null) {
+                const parsed = parseInt(saved, 10);
+                if (!isNaN(parsed) && parsed >= 0 && parsed < initialSteps.length) {
+                    return parsed;
+                }
+            }
+        } catch (_) {}
+
+        // 2. Otherwise find the first step that has not been recorded
+        const firstUnrecorded = initialSteps.findIndex(s => {
+            return (s.status !== 'ok' && s.status !== 'attention' && s.status !== 'urgent' && (!s.comment || s.comment.trim() === ''));
+        });
+
+        return firstUnrecorded !== -1 ? firstUnrecorded : 0;
+    }, [initialSteps, storageKey]);
 
     const [steps, setSteps] = useState<FlatInspectionStep[]>(initialSteps);
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
@@ -95,6 +136,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     useEffect(() => {
         stepsRef.current = steps;
     }, [steps]);
+
+    // Save current step progress to storage
+    const saveProgress = useCallback((stepIdx: number) => {
+        try {
+            localStorage.setItem(storageKey, stepIdx.toString());
+        } catch (_) {}
+    }, [storageKey]);
 
     // Check Web Speech API support
     const isSpeechRecognitionSupported = useMemo(() => {
@@ -206,6 +254,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
         setSteps(updated);
         syncToParent(updated);
+        saveProgress(stepIdx);
 
         const statusLabel = 
             status === 'ok' ? 'Pass' : 
@@ -223,7 +272,55 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             setSubStep('photoPrompt');
             speakText(`${statusLabel} recorded. Do you need a photo for this step? Say Yes or No.`);
         }
+    }, [syncToParent, speakText, saveProgress]);
+
+    // Retake Notes handler (clears note and prompts to speak again)
+    const handleRetakeNotes = useCallback(() => {
+        const stepIdx = currentStepIndexRef.current;
+        const activeSubStep = subStepRef.current;
+
+        if (activeSubStep === 'findingNotes') {
+            const updated = [...stepsRef.current];
+            updated[stepIdx] = {
+                ...updated[stepIdx],
+                comment: ''
+            };
+            setSteps(updated);
+            syncToParent(updated);
+            setLiveTranscript('');
+            setLastHeardCommand("Observation notes cleared for retake");
+            speakText("Observation notes cleared. Please dictate your notes again.");
+        } else if (activeSubStep === 'photoNotes') {
+            const updated = [...stepsRef.current];
+            updated[stepIdx] = {
+                ...updated[stepIdx],
+                photoNotes: ''
+            };
+            setSteps(updated);
+            syncToParent(updated);
+            setLiveTranscript('');
+            setLastHeardCommand("Photo notes cleared for retake");
+            speakText("Photo notes cleared. Please dictate your photo details again.");
+        } else {
+            const updated = [...stepsRef.current];
+            updated[stepIdx] = {
+                ...updated[stepIdx],
+                comment: ''
+            };
+            setSteps(updated);
+            syncToParent(updated);
+            setLiveTranscript('');
+            setLastHeardCommand("Notes cleared");
+            speakText("Notes cleared.");
+        }
     }, [syncToParent, speakText]);
+
+    // Reset finding to re-record status
+    const handleResetFinding = useCallback(() => {
+        setSubStep('answer');
+        setLastHeardCommand("Finding reset to re-record");
+        speakText("Finding reset. Say Pass, Attention, or Urgent.");
+    }, [speakText]);
 
     // Advance to next step
     const advanceToNextStep = useCallback(() => {
@@ -233,11 +330,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             const nextIdx = stepIdx + 1;
             setCurrentStepIndex(nextIdx);
             setSubStep('answer');
+            saveProgress(nextIdx);
             readCurrentStep(nextIdx);
         } else {
             speakText("Inspection complete! All items recorded.");
         }
-    }, [readCurrentStep, speakText]);
+    }, [readCurrentStep, speakText, saveProgress]);
 
     // Comment change handler
     const handleCommentChange = useCallback((comment: string) => {
@@ -261,12 +359,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
         setSteps(updated);
         syncToParent(updated);
+        saveProgress(stepIdx);
 
         setLastHeardCommand(`Notes recorded`);
         // Move to photo prompt after notes are captured
         setSubStep('photoPrompt');
         speakText("Observation recorded. Do you need a photo for this step? Say Yes or No.");
-    }, [syncToParent, speakText]);
+    }, [syncToParent, speakText, saveProgress]);
 
     // Photo prompt decision handler
     const handlePhotoChoice = useCallback((needPhoto: boolean) => {
@@ -278,6 +377,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
         setSteps(updated);
         syncToParent(updated);
+        saveProgress(stepIdx);
 
         if (needPhoto) {
             setLastHeardCommand("Photo Flagged: Yes");
@@ -287,7 +387,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             setLastHeardCommand("Photo Flagged: No");
             speakText("No photo needed. Say Next when ready.");
         }
-    }, [syncToParent, speakText]);
+    }, [syncToParent, speakText, saveProgress]);
 
     // Photo notes submission handler
     const handlePhotoNotesSubmit = useCallback((notes: string) => {
@@ -311,10 +411,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             const prevIdx = stepIdx - 1;
             setCurrentStepIndex(prevIdx);
             setSubStep('answer');
+            saveProgress(prevIdx);
             setLastHeardCommand("Going back to previous step");
             readCurrentStep(prevIdx);
         }
-    }, [readCurrentStep]);
+    }, [readCurrentStep, saveProgress]);
 
     // Jump to specific step
     const handleJumpToStep = useCallback((targetStepNumber: number) => {
@@ -324,10 +425,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             setCurrentStepIndex(idx);
             setSubStep('answer');
             setJumpStepInput('');
+            saveProgress(idx);
             setLastHeardCommand(`Jumped to step #${targetStepNumber}`);
             readCurrentStep(idx);
         }
-    }, [readCurrentStep]);
+    }, [readCurrentStep, saveProgress]);
 
     // Pause & Save handler
     const handlePauseAndSave = useCallback(() => {
@@ -337,9 +439,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 recognitionRef.current.stop();
             } catch (_) {}
         }
+        saveProgress(currentStepIndexRef.current);
         syncToParent(stepsRef.current);
         onClose();
-    }, [syncToParent, onClose]);
+    }, [syncToParent, saveProgress, onClose]);
 
     // Text normalizer to clean punctuation and abbreviations (e.g. "o.k." -> "ok")
     const normalizeSpeechText = (text: string): string => {
@@ -399,6 +502,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const isUrgent = /\b(urgent|red|fail|failed|danger|defect|dangerous|broken|replace)\b/i.test(cleaned);
                     const isNa = /\b(not applicable|n a|na|skip)\b/i.test(cleaned);
 
+                    const isRetake = /\b(retake|retake note|retake notes|clear note|clear notes|start over|try again|erase note|delete note|delete notes|scrap note|wipe note)\b/i.test(cleaned);
+                    const isResetFinding = /\b(change finding|reset finding|change status|reset status|wrong status)\b/i.test(cleaned);
+
                     const isPhotoYes = /\b(yes|yeah|yep|photo|take photo|need photo|require photo|true)\b/i.test(cleaned);
                     const isPhotoNo = /\b(no|nope|nah|none|don't|dont|no photo|negative)\b/i.test(cleaned);
 
@@ -408,9 +514,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const isPause = /\b(pause|stop|save log|pause inspection|finish inspection)\b/i.test(cleaned);
 
                     // Interrupt TTS if a definitive command is spoken
-                    if (isOk || isAttention || isUrgent || isNa || isPhotoYes || isPhotoNo || isNext || isBack || isRepeat || isPause) {
+                    if (isOk || isAttention || isUrgent || isNa || isRetake || isResetFinding || isPhotoYes || isPhotoNo || isNext || isBack || isRepeat || isPause) {
                         cloudSpeechSynthesis.cancel();
                         setIsSpeaking(false);
+                    }
+
+                    // Retake command - clears current notes and asks to speak again
+                    if (isRetake) {
+                        lastCommandTimestampRef.current = now;
+                        handleRetakeNotes();
+                        return;
+                    }
+
+                    // Reset finding command
+                    if (isResetFinding) {
+                        lastCommandTimestampRef.current = now;
+                        handleResetFinding();
+                        return;
                     }
 
                     // Global Navigation
@@ -571,7 +691,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         } catch (err) {
             console.warn('[Speech Recognition Init Error]:', err);
         }
-    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handleFindingNotesSubmit, handlePhotoChoice, handlePhotoNotesSubmit, syncToParent, isOpen]);
+    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handleFindingNotesSubmit, handleRetakeNotes, handleResetFinding, handlePhotoChoice, handlePhotoNotesSubmit, syncToParent, isOpen]);
 
     // Request Mic Permission & Start
     const handleEnableMicrophone = async () => {
@@ -615,7 +735,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         if (!isOpen) return;
 
         isManuallyStoppedRef.current = false;
-        // Prompt for mic permission or start listening
         handleEnableMicrophone();
 
         return () => {
@@ -629,15 +748,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
     }, [isOpen]);
 
-    // Read initial question after slight mount delay
+    // On modal open: pick up from where left off (resume point)
     useEffect(() => {
         if (isOpen && steps.length > 0) {
+            const resumeIdx = getInitialResumeIndex();
+            setCurrentStepIndex(resumeIdx);
+            setSubStep('answer');
             const timer = setTimeout(() => {
-                readCurrentStep(0);
+                if (resumeIdx > 0) {
+                    const step = stepsRef.current[resumeIdx];
+                    speakText(`Resuming inspection at question ${resumeIdx + 1}. ${step?.sectionTitle || ''}. ${step?.itemLabel || ''}.`);
+                } else {
+                    readCurrentStep(0);
+                }
             }, 600);
             return () => clearTimeout(timer);
         }
-    }, [isOpen, readCurrentStep, steps.length]);
+    }, [isOpen, getInitialResumeIndex, readCurrentStep, speakText, steps.length]);
 
     if (!isOpen || steps.length === 0) return null;
 
@@ -725,6 +852,24 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     />
                 </div>
 
+                {/* Resume Status Notification Banner */}
+                {currentStepIndex > 0 && (
+                    <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-1.5 flex items-center justify-between text-xs text-indigo-900">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">Resume Point</span>
+                            <span>Picked up from Question {currentStepIndex + 1} of {totalSteps}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => handleJumpToStep(1)}
+                            className="text-[11px] text-indigo-600 hover:text-indigo-900 font-bold underline cursor-pointer flex items-center gap-1"
+                        >
+                            <RefreshCw size={11} />
+                            <span>Start over from Question #1</span>
+                        </button>
+                    </div>
+                )}
+
                 {/* Real-time Voice Status Pill / Banner */}
                 <div className="bg-slate-900 text-slate-200 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-medium">
                     <div className="flex items-center gap-2 overflow-hidden flex-1 mr-2">
@@ -746,9 +891,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 ) : (
                                     <span className="truncate">
                                         {subStep === 'findingNotes' 
-                                            ? 'Listening for observations... Speak notes or say "Done"'
+                                            ? 'Listening for observations... Speak notes, or say "Done" / "Retake"'
                                             : subStep === 'photoPrompt'
                                             ? 'Listening... Say "Yes" or "No" for photo'
+                                            : subStep === 'photoNotes'
+                                            ? 'Listening for photo details... Say notes, or "Done" / "Retake"'
                                             : 'Listening... Say "OK", "Attention", "Urgent", or "Next"'}
                                     </span>
                                 )}
@@ -941,11 +1088,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                         {currentStep.status === 'urgent' ? 'Record Urgent Defect Notes' : 'Record Attention / Advisory Notes'}
                                     </span>
                                 </div>
-                                <span className={`text-[11px] font-semibold italic ${
-                                    currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
-                                }`}>
-                                    (Speak notes aloud, then say &ldquo;Done&rdquo; or click below)
-                                </span>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={handleResetFinding}
+                                        className="text-[11px] text-slate-500 hover:text-slate-800 underline font-semibold cursor-pointer"
+                                    >
+                                        Change Finding
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -983,20 +1134,33 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <span className={`text-[11px] font-medium ${
                                     currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
                                 }`}>
-                                    🎙️ Speak your observations now hands-free. Say &ldquo;Done&rdquo; or &ldquo;Continue&rdquo; when finished.
+                                    🎙️ Speak your observations now. If misheard, say &ldquo;Retake&rdquo; or click Retake Note.
                                 </span>
-                                <button
-                                    type="button"
-                                    onClick={() => handleFindingNotesSubmit(currentStep.comment || '')}
-                                    className={`px-4 py-2 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${
-                                        currentStep.status === 'urgent' 
-                                            ? 'bg-red-600 hover:bg-red-700' 
-                                            : 'bg-amber-600 hover:bg-amber-700'
-                                    }`}
-                                >
-                                    <span>Save Notes & Check Photo</span>
-                                    <ArrowRight size={14} />
-                                </button>
+                                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                                    {/* Retake Note Button */}
+                                    <button
+                                        type="button"
+                                        onClick={handleRetakeNotes}
+                                        className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                        title="Clear notes and speak again"
+                                    >
+                                        <RotateCcw size={14} className="text-amber-600" />
+                                        <span>Retake Note</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handleFindingNotesSubmit(currentStep.comment || '')}
+                                        className={`px-4 py-2 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${
+                                            currentStep.status === 'urgent' 
+                                                ? 'bg-red-600 hover:bg-red-700' 
+                                                : 'bg-amber-600 hover:bg-amber-700'
+                                        }`}
+                                    >
+                                        <span>Save Notes & Check Photo</span>
+                                        <ArrowRight size={14} />
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1068,7 +1232,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     }
                                 }}
                             />
-                            <div className="flex justify-end gap-2">
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                                <button
+                                    type="button"
+                                    onClick={handleRetakeNotes}
+                                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                                    title="Clear photo notes and speak again"
+                                >
+                                    <RotateCcw size={14} className="text-amber-600" />
+                                    <span>Retake Note</span>
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => handlePhotoNotesSubmit(currentStep.photoNotes || '')}
