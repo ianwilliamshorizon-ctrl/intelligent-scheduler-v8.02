@@ -1281,7 +1281,15 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                             </div>
                                         </div>
                                         {editableJob.inspectionChecklist ? (
-                                            <InspectionChecklist checklistData={editableJob.inspectionChecklist} onUpdate={(sections) => setEditableJob(prev => prev ? { ...prev, inspectionChecklist: sections } : null)} isReadOnly={isReadOnly} vehicleRegistration={vehicle?.registration} vehicleModel={vehicle ? [vehicle.make, vehicle.model].filter(Boolean).join(" ") : undefined} />
+                                            <InspectionChecklist 
+                                                checklistData={editableJob.inspectionChecklist} 
+                                                onUpdate={(sections) => setEditableJob(prev => prev ? { ...prev, inspectionChecklist: sections } : null)} 
+                                                isReadOnly={isReadOnly} 
+                                                vehicleRegistration={vehicle?.registration} 
+                                                vehicleModel={vehicle ? [vehicle.make, vehicle.model].filter(Boolean).join(" ") : undefined}
+                                                tyreData={editableJob.tyreCheck}
+                                                onTyreUpdate={(updatedTyres) => setEditableJob(prev => prev ? { ...prev, tyreCheck: updatedTyres } : null)}
+                                            />
                                         ) : (
                                             <div className="text-center py-10 px-4 bg-gray-50 rounded-lg"><ListChecks size={32} className="mx-auto text-gray-400"/><h3 className="mt-2 text-sm font-medium text-gray-900">No Inspection Selected</h3><p className="mt-1 text-sm text-gray-500">Please select an inspection template to begin.</p></div>
                                         )}

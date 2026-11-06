@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ChecklistSection, ChecklistItemStatus } from '../types';
+import { ChecklistSection, ChecklistItemStatus, TyreCheckData, TyreLocation, TyreData } from '../types';
 import {
     X, Check, AlertTriangle, XCircle, HelpCircle, Camera,
     ArrowRight, ArrowLeft, Pause, Sparkles, CheckCircle2, ListFilter,
-    Volume2, VolumeX, Mic, MicOff, RotateCcw, AlertCircle, RefreshCw
+    Volume2, VolumeX, Mic, MicOff, RotateCcw, AlertCircle, RefreshCw,
+    Disc, Gauge, FileText, CheckCheck, Edit2, ChevronRight, Eye
 } from 'lucide-react';
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
@@ -27,9 +28,89 @@ interface GuidedInspectionModalProps {
     onChecklistUpdate: (updated: ChecklistSection[]) => void;
     vehicleRegistration?: string;
     vehicleModel?: string;
+    tyreData?: TyreCheckData;
+    onTyreUpdate?: (updated: TyreCheckData) => void;
 }
 
+type InspectionMode = 'checklist' | 'tyres' | 'summary';
 type InspectionSubStep = 'answer' | 'findingNotes' | 'photoPrompt' | 'photoNotes';
+type TyreSubStep = 'depths' | 'comments';
+
+export const TYRE_KEYS: TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
+
+export const TYRE_META: Record<TyreLocation, { name: string; short: string; position: string }> = {
+    frontLeft: { name: 'Front Left (N/S/F)', short: 'FL', position: 'Nearside Front' },
+    frontRight: { name: 'Front Right (O/S/F)', short: 'FR', position: 'Offside Front' },
+    rearLeft: { name: 'Rear Left (N/S/R)', short: 'RL', position: 'Nearside Rear' },
+    rearRight: { name: 'Rear Right (O/S/R)', short: 'RR', position: 'Offside Rear' },
+    spare: { name: 'Spare Tyre', short: 'SP', position: 'Boot / Underslung' },
+};
+
+export const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType; color: string; bg: string; border: string; label: string }> = {
+    ok: { icon: Check, color: 'text-emerald-700', bg: 'bg-emerald-500', border: 'border-emerald-500', label: 'OK / Pass' },
+    attention: { icon: AlertTriangle, color: 'text-amber-700', bg: 'bg-amber-500', border: 'border-amber-500', label: 'Attention' },
+    urgent: { icon: XCircle, color: 'text-red-700', bg: 'bg-red-500', border: 'border-red-500', label: 'Urgent' },
+    na: { icon: HelpCircle, color: 'text-slate-500', bg: 'bg-slate-400', border: 'border-slate-300', label: 'N/A' },
+};
+
+// Automatic status evaluation based on tread depths and damage remarks
+export const evaluateTyreStatus = (outer?: number, middle?: number, inner?: number, comments?: string): ChecklistItemStatus => {
+    const depths = [outer, middle, inner].filter((d): d is number => d !== undefined && !isNaN(d));
+    const c = (comments || '').toLowerCase();
+    const hasDefect = /\b(nail|puncture|screw|bulge|cut|tear|cord|cracked|perished|damage|damaged|bald)\b/i.test(c);
+
+    if (depths.length > 0) {
+        const min = Math.min(...depths);
+        if (min <= 1.6 || hasDefect) return 'urgent';
+        if (min < 3.0) return 'attention';
+        return 'ok';
+    }
+    if (hasDefect) return 'urgent';
+    return 'ok';
+};
+
+// Spoken numbers extractor for tyre tread depths
+export const parseSpokenDepths = (rawText: string): { outer: number; middle: number; inner: number } | null => {
+    let t = rawText.toLowerCase();
+    const wordDigits: Record<string, string> = {
+        zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5',
+        six: '6', seven: '7', eight: '8', nine: '9', ten: '10'
+    };
+    for (const [w, digit] of Object.entries(wordDigits)) {
+        t = t.replace(new RegExp(`\b${w}\b`, 'g'), digit);
+    }
+    t = t.replace(/(\d+)\s*point\s*(\d+)/g, '$1.$2');
+
+    const matches = t.match(/\d+(?:\.\d+)?/g);
+    if (!matches || matches.length === 0) return null;
+
+    const nums = matches.map(Number).filter(n => !isNaN(n) && n >= 0 && n <= 35);
+    if (nums.length >= 3) {
+        return { outer: nums[0], middle: nums[1], inner: nums[2] };
+    }
+    if (nums.length === 1) {
+        return { outer: nums[0], middle: nums[0], inner: nums[0] };
+    }
+    if (nums.length === 2) {
+        return { outer: nums[0], middle: nums[0], inner: nums[1] };
+    }
+    return null;
+};
+
+const createDefaultTyres = (incoming?: TyreCheckData): TyreCheckData => {
+    const base: TyreCheckData = {
+        frontLeft: { indicator: 'na', outer: undefined, middle: undefined, inner: undefined, comments: '' },
+        frontRight: { indicator: 'na', outer: undefined, middle: undefined, inner: undefined, comments: '' },
+        rearLeft: { indicator: 'na', outer: undefined, middle: undefined, inner: undefined, comments: '' },
+        rearRight: { indicator: 'na', outer: undefined, middle: undefined, inner: undefined, comments: '' },
+        spare: { indicator: 'na', outer: undefined, middle: undefined, inner: undefined, comments: '' },
+    };
+    if (!incoming) return base;
+    return {
+        ...base,
+        ...incoming
+    };
+};
 
 export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     isOpen,
@@ -37,8 +118,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     checklistData,
     onChecklistUpdate,
     vehicleRegistration,
-    vehicleModel
+    vehicleModel,
+    tyreData,
+    onTyreUpdate
 }) => {
+    // Mode: checklist, tyres, summary
+    const [mode, setMode] = useState<InspectionMode>('checklist');
+    const modeRef = useRef<InspectionMode>('checklist');
+    useEffect(() => { modeRef.current = mode; }, [mode]);
+
     // Unique storage key based on registration or checklist id to persist progress
     const storageKey = useMemo(() => {
         const reg = (vehicleRegistration || '').trim().toUpperCase();
@@ -46,6 +134,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         const firstId = checklistData[0]?.id || 'chk';
         return `guided_inspection_progress_${reg || model || firstId}`;
     }, [vehicleRegistration, vehicleModel, checklistData]);
+
+    const tyreStorageKey = useMemo(() => {
+        const reg = (vehicleRegistration || '').trim().toUpperCase();
+        const model = (vehicleModel || '').trim().toLowerCase();
+        return `guided_inspection_tyres_${reg || model || 'tyres'}`;
+    }, [vehicleRegistration, vehicleModel]);
 
     // Flatten all sections into a sequential list of steps
     const initialSteps = useMemo(() => {
@@ -77,11 +171,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         return steps;
     }, [checklistData]);
 
-    // Calculate initial resume index (either from saved progress or first unrecorded item)
+    // Calculate initial resume index
     const getInitialResumeIndex = useCallback(() => {
         if (!initialSteps || initialSteps.length === 0) return 0;
-
-        // 1. Check if there is a saved step in localStorage
         try {
             const saved = localStorage.getItem(storageKey);
             if (saved !== null) {
@@ -92,11 +184,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             }
         } catch (_) { }
 
-        // 2. Otherwise find the first step that has not been recorded
         const firstUnrecorded = initialSteps.findIndex(s => {
             return (s.status !== 'ok' && s.status !== 'attention' && s.status !== 'urgent' && (!s.comment || s.comment.trim() === ''));
         });
-
         return firstUnrecorded !== -1 ? firstUnrecorded : 0;
     }, [initialSteps, storageKey]);
 
@@ -104,6 +194,28 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const [currentStepIndex, setCurrentStepIndex] = useState<number>(0);
     const [subStep, setSubStep] = useState<InspectionSubStep>('answer');
     const [jumpStepInput, setJumpStepInput] = useState<string>('');
+
+    // Tyre Report State
+    const [tyres, setTyres] = useState<TyreCheckData>(() => {
+        try {
+            const saved = localStorage.getItem(tyreStorageKey);
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                return createDefaultTyres({ ...(tyreData || {}), ...parsed });
+            }
+        } catch (_) {}
+        return createDefaultTyres(tyreData);
+    });
+    const tyresRef = useRef<TyreCheckData>(tyres);
+    useEffect(() => { tyresRef.current = tyres; }, [tyres]);
+
+    const [currentTyreIndex, setCurrentTyreIndex] = useState<number>(0);
+    const currentTyreIndexRef = useRef<number>(0);
+    useEffect(() => { currentTyreIndexRef.current = currentTyreIndex; }, [currentTyreIndex]);
+
+    const [tyreSubStep, setTyreSubStep] = useState<TyreSubStep>('depths');
+    const tyreSubStepRef = useRef<TyreSubStep>('depths');
+    useEffect(() => { tyreSubStepRef.current = tyreSubStep; }, [tyreSubStep]);
 
     // Speech & Voice Navigation State
     const [isTtsEnabled, setIsTtsEnabled] = useState<boolean>(true);
@@ -131,17 +243,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const lastSpeechEndTimeRef = useRef<number>(0);
 
     // Keep refs in sync with current state
-    useEffect(() => {
-        subStepRef.current = subStep;
-    }, [subStep]);
-
-    useEffect(() => {
-        currentStepIndexRef.current = currentStepIndex;
-    }, [currentStepIndex]);
-
-    useEffect(() => {
-        stepsRef.current = steps;
-    }, [steps]);
+    useEffect(() => { subStepRef.current = subStep; }, [subStep]);
+    useEffect(() => { currentStepIndexRef.current = currentStepIndex; }, [currentStepIndex]);
+    useEffect(() => { stepsRef.current = steps; }, [steps]);
 
     // Save current step progress to storage
     const saveProgress = useCallback((stepIdx: number) => {
@@ -150,11 +254,14 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         } catch (_) { }
     }, [storageKey]);
 
-    // Check Web Speech API support
-    const isSpeechRecognitionSupported = useMemo(() => {
-        if (typeof window === 'undefined') return false;
-        return !!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition);
-    }, []);
+    // Save tyre progress
+    const saveTyreData = useCallback((updated: TyreCheckData) => {
+        setTyres(updated);
+        try {
+            localStorage.setItem(tyreStorageKey, JSON.stringify(updated));
+        } catch (_) {}
+        onTyreUpdate?.(updated);
+    }, [tyreStorageKey, onTyreUpdate]);
 
     // Synchronize current state back to parent checklist
     const syncToParent = useCallback((currentStepsState: FlatInspectionStep[]) => {
@@ -178,14 +285,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         onChecklistUpdate(updated);
     }, [checklistData, onChecklistUpdate]);
 
-    // Text-to-Speech speaking function with strict deduplication
+    // Text-to-Speech speaking function with strict deduplication & acoustic shielding
     const speakText = useCallback((text: string, onDone?: () => void) => {
         if (!isTtsEnabled) {
             onDone?.();
             return;
         }
 
-        // Prevent duplicate immediate triggers of the exact same text within 1500ms
         const now = Date.now();
         if (lastSpokenTextRef.current === text && now - lastSpokenTimeRef.current < 1500) {
             return;
@@ -233,7 +339,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 finishSpeaking();
             };
 
-            // Dynamic safety timeout proportional to length (at least 15s) to avoid getting stuck
             const dynamicTimeoutMs = Math.max(15000, cleaned.length * 150);
             safetyTimerRef.current = setTimeout(() => {
                 finishSpeaking();
@@ -262,19 +367,34 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         speakText(textToSpeak);
     }, [speakText]);
 
-    // Replay current step audio
-    const handleRepeatAudio = useCallback(() => {
-        const activeSubStep = subStepRef.current;
-        if (activeSubStep === 'answer') {
-            readCurrentStep(currentStepIndexRef.current);
-        } else if (activeSubStep === 'findingNotes') {
-            speakText("Please describe what you observed, or say Continue.");
-        } else if (activeSubStep === 'photoPrompt') {
-            speakText("Do you need a photo for this step? Say Yes or No.");
-        } else if (activeSubStep === 'photoNotes') {
-            speakText("Photo flagged. Say your photo notes, or say Next when ready.");
+    // Read the current tyre prompt aloud
+    const readCurrentTyre = useCallback((tyreIdx: number, sub: TyreSubStep = 'depths') => {
+        const loc = TYRE_KEYS[tyreIdx];
+        const info = TYRE_META[loc];
+        if (sub === 'depths') {
+            speakText(`${info.name}. Please say outer, middle, and inner tread depths. For example, 6, 6, 5.`);
+        } else {
+            speakText(`${info.name}: Say comments such as nail in tyre or damage, or say None when ready.`);
         }
-    }, [readCurrentStep, speakText]);
+    }, [speakText]);
+
+    // Replay current audio depending on mode
+    const handleRepeatAudio = useCallback(() => {
+        if (modeRef.current === 'checklist') {
+            const activeSubStep = subStepRef.current;
+            if (activeSubStep === 'answer') {
+                readCurrentStep(currentStepIndexRef.current);
+            } else if (activeSubStep === 'findingNotes') {
+                speakText("Please describe what you observed, or say Continue.");
+            } else if (activeSubStep === 'photoPrompt') {
+                speakText("Do you need a photo for this step? Say Yes or No.");
+            } else if (activeSubStep === 'photoNotes') {
+                speakText("Photo flagged. Say your photo notes, or say Next when ready.");
+            }
+        } else if (modeRef.current === 'tyres') {
+            readCurrentTyre(currentTyreIndexRef.current, tyreSubStepRef.current);
+        }
+    }, [readCurrentStep, readCurrentTyre, speakText]);
 
     // Step status selection handler
     const handleSelectStatus = useCallback((status: ChecklistItemStatus) => {
@@ -296,18 +416,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         setLastHeardCommand(`Marked: ${statusLabel}`);
 
-        // If Attention or Urgent, prompt for notes FIRST before asking about photo
         if (status === 'attention' || status === 'urgent') {
             setSubStep('findingNotes');
             speakText(`${statusLabel} recorded. Please describe what you observed, or say Continue.`);
         } else {
-            // For OK / Pass or N/A, go directly to photo prompt
             setSubStep('photoPrompt');
             speakText(`${statusLabel} recorded. Do you need a photo for this step? Say Yes or No.`);
         }
     }, [syncToParent, speakText, saveProgress]);
 
-    // Retake Notes handler (clears note and prompts to speak again)
+    // Retake Notes handler (checklist)
     const handleRetakeNotes = useCallback(() => {
         const stepIdx = currentStepIndexRef.current;
         const activeSubStep = subStepRef.current;
@@ -355,7 +473,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         speakText("Finding reset. Say Pass, Attention, or Urgent.");
     }, [speakText]);
 
-    // Advance to next step
+    // Advance to next step (or transition to tyre check when checklist is complete)
     const advanceToNextStep = useCallback(() => {
         const stepIdx = currentStepIndexRef.current;
         const total = stepsRef.current.length;
@@ -366,7 +484,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             saveProgress(nextIdx);
             readCurrentStep(nextIdx);
         } else {
-            speakText("Inspection complete! All items recorded.");
+            // Checklist complete -> Transition into Tyre Check!
+            setMode('tyres');
+            setCurrentTyreIndex(0);
+            setTyreSubStep('depths');
+            speakText("Checklist items complete! Now moving to the tyre check report. Starting with the Front Left tyre. Please say outer, middle, and inner tread depths.");
         }
     }, [readCurrentStep, speakText, saveProgress]);
 
@@ -382,7 +504,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         syncToParent(updated);
     }, [syncToParent]);
 
-    // Finding notes submitted (after attention/urgent), then proceed to photo prompt
+    // Finding notes submitted
     const handleFindingNotesSubmit = useCallback((notes: string) => {
         const stepIdx = currentStepIndexRef.current;
         const updated = [...stepsRef.current];
@@ -395,7 +517,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         saveProgress(stepIdx);
 
         setLastHeardCommand(`Notes recorded`);
-        // Move to photo prompt after notes are captured
         setSubStep('photoPrompt');
         speakText("Observation recorded. Do you need a photo for this step? Say Yes or No.");
     }, [syncToParent, speakText, saveProgress]);
@@ -413,16 +534,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         saveProgress(stepIdx);
 
         if (needPhoto) {
-            setLastHeardCommand("Photo Flagged: Yes");
             setSubStep('photoNotes');
+            setLastHeardCommand("Photo flagged: Yes");
             speakText("Photo required. Say photo notes, or say Next when ready.");
         } else {
-            setLastHeardCommand("Photo Flagged: No");
+            setLastHeardCommand("Photo flagged: No");
             speakText("No photo needed. Say Next when ready.");
         }
     }, [syncToParent, speakText, saveProgress]);
 
-    // Photo notes submission handler
+    // Photo notes submitted
     const handlePhotoNotesSubmit = useCallback((notes: string) => {
         const stepIdx = currentStepIndexRef.current;
         const updated = [...stepsRef.current];
@@ -432,12 +553,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
         setSteps(updated);
         syncToParent(updated);
+        saveProgress(stepIdx);
 
-        setLastHeardCommand(`Photo notes saved`);
+        setLastHeardCommand("Photo notes recorded");
         advanceToNextStep();
-    }, [syncToParent, advanceToNextStep]);
+    }, [syncToParent, advanceToNextStep, saveProgress]);
 
-    // Go back to previous step
+    // Navigate to previous step
     const handlePreviousStep = useCallback(() => {
         const stepIdx = currentStepIndexRef.current;
         if (stepIdx > 0) {
@@ -445,16 +567,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             setCurrentStepIndex(prevIdx);
             setSubStep('answer');
             saveProgress(prevIdx);
-            setLastHeardCommand("Going back to previous step");
             readCurrentStep(prevIdx);
         }
     }, [readCurrentStep, saveProgress]);
 
     // Jump to specific step
     const handleJumpToStep = useCallback((targetStepNumber: number) => {
-        const idx = targetStepNumber - 1;
         const total = stepsRef.current.length;
-        if (idx >= 0 && idx < total) {
+        if (targetStepNumber >= 1 && targetStepNumber <= total) {
+            const idx = targetStepNumber - 1;
+            setMode('checklist');
             setCurrentStepIndex(idx);
             setSubStep('answer');
             setJumpStepInput('');
@@ -463,6 +585,138 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             readCurrentStep(idx);
         }
     }, [readCurrentStep, saveProgress]);
+
+    // --- TYRE CHECK ACTIONS ---
+    const handleTyreDepthsSubmit = useCallback((outer: number, middle: number, inner: number) => {
+        const loc = TYRE_KEYS[currentTyreIndexRef.current];
+        const current = tyresRef.current[loc] || { indicator: 'na' };
+        const autoStatus = evaluateTyreStatus(outer, middle, inner, current.comments);
+        const updated = {
+            ...tyresRef.current,
+            [loc]: {
+                ...current,
+                outer,
+                middle,
+                inner,
+                indicator: autoStatus
+            }
+        };
+        saveTyreData(updated);
+        setTyreSubStep('comments');
+        const statusPhrase = autoStatus === 'ok' ? 'Pass' : autoStatus === 'attention' ? 'Attention required' : 'Urgent replacement';
+        setLastHeardCommand(`Depths: O:${outer} M:${middle} I:${inner} mm (${statusPhrase})`);
+        speakText(`${TYRE_META[loc].name}: Outer ${outer}, middle ${middle}, inner ${inner} recorded. Status ${statusPhrase}. Any tyre comments like a nail or damage, or say None?`);
+    }, [saveTyreData, speakText]);
+
+    const handleTyreCommentSubmit = useCallback((comment: string) => {
+        const loc = TYRE_KEYS[currentTyreIndexRef.current];
+        const current = tyresRef.current[loc] || { indicator: 'na' };
+        const cleanComment = (comment || '').trim();
+        const autoStatus = evaluateTyreStatus(current.outer, current.middle, current.inner, cleanComment);
+        const updated = {
+            ...tyresRef.current,
+            [loc]: {
+                ...current,
+                comments: cleanComment,
+                indicator: autoStatus
+            }
+        };
+        saveTyreData(updated);
+        setLastHeardCommand(cleanComment ? `Comment: "${cleanComment}"` : 'No comment');
+
+        const nextIdx = currentTyreIndexRef.current + 1;
+        if (nextIdx < 4) {
+            setCurrentTyreIndex(nextIdx);
+            setTyreSubStep('depths');
+            const nextLoc = TYRE_KEYS[nextIdx];
+            const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
+            speakText(`${commentConfirm}Moving to ${TYRE_META[nextLoc].name}. Say outer, middle, and inner tread depths.`);
+        } else {
+            setMode('summary');
+            speakText("Tyre check report complete! All 4 road tyres and inspection checklist points have been recorded and saved.");
+        }
+    }, [saveTyreData, speakText]);
+
+    const handleRetakeTyreDepths = useCallback(() => {
+        const loc = TYRE_KEYS[currentTyreIndexRef.current];
+        const current = tyresRef.current[loc] || { indicator: 'na' };
+        const updated = {
+            ...tyresRef.current,
+            [loc]: {
+                ...current,
+                outer: undefined,
+                middle: undefined,
+                inner: undefined,
+                indicator: 'na'
+            }
+        };
+        saveTyreData(updated);
+        setTyreSubStep('depths');
+        setLastHeardCommand("Tread depths cleared for retake");
+        speakText(`Tread depths cleared for ${TYRE_META[loc].name}. Please dictate outer, middle, and inner depths.`);
+    }, [saveTyreData, speakText]);
+
+    const handleRetakeTyreComment = useCallback(() => {
+        const loc = TYRE_KEYS[currentTyreIndexRef.current];
+        const current = tyresRef.current[loc] || { indicator: 'na' };
+        const updated = {
+            ...tyresRef.current,
+            [loc]: {
+                ...current,
+                comments: '',
+                indicator: evaluateTyreStatus(current.outer, current.middle, current.inner, '')
+            }
+        };
+        saveTyreData(updated);
+        setTyreSubStep('comments');
+        setLastHeardCommand("Comment cleared for retake");
+        speakText(`Comment cleared for ${TYRE_META[loc].name}. Dictate comments, or say None.`);
+    }, [saveTyreData, speakText]);
+
+    const handleNextTyre = useCallback(() => {
+        const nextIdx = currentTyreIndexRef.current + 1;
+        if (nextIdx < TYRE_KEYS.length) {
+            setCurrentTyreIndex(nextIdx);
+            setTyreSubStep('depths');
+            readCurrentTyre(nextIdx, 'depths');
+        } else {
+            setMode('summary');
+            speakText("All tyres recorded. Showing inspection summary.");
+        }
+    }, [readCurrentTyre, speakText]);
+
+    const handlePreviousTyre = useCallback(() => {
+        if (currentTyreIndexRef.current > 0) {
+            const prevIdx = currentTyreIndexRef.current - 1;
+            setCurrentTyreIndex(prevIdx);
+            setTyreSubStep('depths');
+            readCurrentTyre(prevIdx, 'depths');
+        } else {
+            setMode('checklist');
+            readCurrentStep(stepsRef.current.length - 1);
+        }
+    }, [readCurrentTyre, readCurrentStep]);
+
+    const handleJumpToTyre = useCallback((idx: number) => {
+        if (idx >= 0 && idx < TYRE_KEYS.length) {
+            setCurrentTyreIndex(idx);
+            setTyreSubStep('depths');
+            readCurrentTyre(idx, 'depths');
+        }
+    }, [readCurrentTyre]);
+
+    const handleManualTyreUpdate = useCallback((location: TyreLocation, field: keyof TyreData, value: any) => {
+        const current = tyresRef.current[location] || { indicator: 'na' };
+        const updatedTyre = { ...current, [field]: value };
+        if (field === 'outer' || field === 'middle' || field === 'inner' || field === 'comments') {
+            updatedTyre.indicator = evaluateTyreStatus(updatedTyre.outer, updatedTyre.middle, updatedTyre.inner, updatedTyre.comments);
+        }
+        const updated = {
+            ...tyresRef.current,
+            [location]: updatedTyre
+        };
+        saveTyreData(updated);
+    }, [saveTyreData]);
 
     // Pause & Save handler
     const handlePauseAndSave = useCallback(() => {
@@ -479,10 +733,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         }
         saveProgress(currentStepIndexRef.current);
         syncToParent(stepsRef.current);
+        saveTyreData(tyresRef.current);
         onClose();
-    }, [syncToParent, saveProgress, onClose]);
+    }, [syncToParent, saveProgress, saveTyreData, onClose]);
 
-    // Text normalizer to clean punctuation and abbreviations (e.g. "o.k." -> "ok")
+    // Text normalizer to clean punctuation and abbreviations
     const normalizeSpeechText = (text: string): string => {
         return text
             .toLowerCase()
@@ -512,7 +767,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             const recognition = new SpeechRecognitionClass();
             recognitionRef.current = recognition;
             recognition.continuous = true;
-            recognition.interimResults = true; // Provides instant real-time feedback
+            recognition.interimResults = true;
             recognition.lang = 'en-GB';
 
             recognition.onstart = () => {
@@ -531,7 +786,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const now = Date.now();
 
                     // CRITICAL: Suppress command matching while the host is speaking or during the 400ms room echo settling window.
-                    // This prevents the host's own voice from being heard through the microphone, which was cutting off / truncating the speech in mid-sentence.
                     if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 400)) {
                         continue;
                     }
@@ -547,14 +801,14 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const isUrgent = /\b(urgent|red|fail|failed|danger|defect|dangerous|broken|replace)\b/i.test(cleaned);
                     const isNa = /\b(not applicable|n a|na|skip)\b/i.test(cleaned);
 
-                    const isRetake = /\b(retake|retake note|retake notes|clear note|clear notes|start over|try again|erase note|delete note|delete notes|scrap note|wipe note)\b/i.test(cleaned);
+                    const isRetake = /\b(retake|retake note|retake notes|retake depth|retake depths|clear note|clear notes|clear depths|start over|try again|erase note|delete note)\b/i.test(cleaned);
                     const isResetFinding = /\b(change finding|reset finding|change status|reset status|wrong status)\b/i.test(cleaned);
 
                     const isPhotoYes = /\b(yes|yeah|yep|photo|take photo|need photo|require photo|true)\b/i.test(cleaned);
                     const isPhotoNo = /\b(no|nope|nah|none|don't|dont|no photo|negative)\b/i.test(cleaned);
 
-                    const isNext = /\b(next|continue|move on|go next|next step|next question|forward)\b/i.test(cleaned);
-                    const isBack = /\b(back|previous|go back|last step)\b/i.test(cleaned);
+                    const isNext = /\b(next|continue|move on|go next|next step|next question|next tyre|forward)\b/i.test(cleaned);
+                    const isBack = /\b(back|previous|go back|last step|previous tyre)\b/i.test(cleaned);
                     const isRepeat = /\b(repeat|say again|read again|what was that|pardon)\b/i.test(cleaned);
                     const isPause = /\b(pause|stop|save log|pause inspection|finish inspection)\b/i.test(cleaned);
 
@@ -565,24 +819,92 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         setIsSpeaking(false);
                     }
 
-                    // Retake command - clears current notes and asks to speak again
+                    // Retake command
                     if (isRetake) {
                         lastCommandTimestampRef.current = now;
-                        handleRetakeNotes();
+                        if (modeRef.current === 'tyres') {
+                            if (tyreSubStepRef.current === 'comments') {
+                                handleRetakeTyreComment();
+                            } else {
+                                handleRetakeTyreDepths();
+                            }
+                        } else {
+                            handleRetakeNotes();
+                        }
                         return;
                     }
 
-                    // Reset finding command
-                    if (isResetFinding) {
+                    // Reset finding command (checklist mode)
+                    if (isResetFinding && modeRef.current === 'checklist') {
                         lastCommandTimestampRef.current = now;
                         handleResetFinding();
                         return;
                     }
 
                     // Global Navigation
+                    if (isRepeat) {
+                        lastCommandTimestampRef.current = now;
+                        setLastHeardCommand(`Heard: "Repeat" → Replaying Audio`);
+                        handleRepeatAudio();
+                        return;
+                    }
+
+                    if (isPause) {
+                        lastCommandTimestampRef.current = now;
+                        setLastHeardCommand(`Heard: "Pause" → Pausing & Saving`);
+                        handlePauseAndSave();
+                        return;
+                    }
+
+                    // --- MODE: TYRES VOICE HANDLING ---
+                    if (modeRef.current === 'tyres') {
+                        const activeLoc = TYRE_KEYS[currentTyreIndexRef.current];
+                        const activeSub = tyreSubStepRef.current;
+
+                        if (activeSub === 'depths') {
+                            if (isNext) {
+                                lastCommandTimestampRef.current = now;
+                                handleNextTyre();
+                                return;
+                            }
+                            if (isBack) {
+                                lastCommandTimestampRef.current = now;
+                                handlePreviousTyre();
+                                return;
+                            }
+                            // Try parsing 3 depths or single depth across
+                            const parsed = parseSpokenDepths(cleaned);
+                            if (parsed) {
+                                lastCommandTimestampRef.current = now;
+                                handleTyreDepthsSubmit(parsed.outer, parsed.middle, parsed.inner);
+                                return;
+                            }
+                        } else if (activeSub === 'comments') {
+                            if (isBack) {
+                                lastCommandTimestampRef.current = now;
+                                setTyreSubStep('depths');
+                                speakText(`Retaking tread depths for ${TYRE_META[activeLoc].name}. Say outer, middle, and inner depths.`);
+                                return;
+                            }
+                            // If user says "none", "no", "all good", "pass", "ok", "next":
+                            if (/\b(none|no|nope|no comment|no comments|all good|pass|good|clear|fine|done|skip|next)\b/i.test(cleaned)) {
+                                lastCommandTimestampRef.current = now;
+                                handleTyreCommentSubmit('');
+                                return;
+                            }
+                            // If user dictates a comment
+                            if (result.isFinal || cleaned.length > 5) {
+                                lastCommandTimestampRef.current = now;
+                                handleTyreCommentSubmit(rawTranscript);
+                                return;
+                            }
+                        }
+                        continue;
+                    }
+
+                    // --- MODE: CHECKLIST VOICE HANDLING ---
                     if (isNext) {
                         const activeSubStep = subStepRef.current;
-                        // If in findingNotes or photoNotes, treat "Next" as save & continue
                         if (activeSubStep === 'findingNotes') {
                             lastCommandTimestampRef.current = now;
                             const stepIdx = currentStepIndexRef.current;
@@ -608,21 +930,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         return;
                     }
 
-                    if (isRepeat) {
-                        lastCommandTimestampRef.current = now;
-                        setLastHeardCommand(`Heard: "Repeat" → Replaying Audio`);
-                        handleRepeatAudio();
-                        return;
-                    }
-
-                    if (isPause) {
-                        lastCommandTimestampRef.current = now;
-                        setLastHeardCommand(`Heard: "Pause" → Pausing & Saving`);
-                        handlePauseAndSave();
-                        return;
-                    }
-
-                    // Context-aware Step Commands
                     const activeSubStep = subStepRef.current;
 
                     if (activeSubStep === 'answer') {
@@ -648,14 +955,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             return;
                         }
                     } else if (activeSubStep === 'findingNotes') {
-                        // In findingNotes: if user says done/save/continue, save notes and go to photo prompt
                         if (/\b(done|save|finish notes|complete notes|continue|skip|proceed)\b/i.test(cleaned)) {
                             lastCommandTimestampRef.current = now;
                             const stepIdx = currentStepIndexRef.current;
                             handleFindingNotesSubmit(stepsRef.current[stepIdx]?.comment || '');
                             return;
                         } else if (result.isFinal) {
-                            // Dictate observation notes
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.comment || '';
                             const newComment = existing ? `${existing} ${rawTranscript}` : rawTranscript;
@@ -688,7 +993,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             handlePhotoNotesSubmit(stepsRef.current[stepIdx]?.photoNotes || '');
                             return;
                         } else if (result.isFinal) {
-                            // Dictate photo notes on final results
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.photoNotes || '';
                             const newNotes = existing ? `${existing} ${rawTranscript}` : rawTranscript;
@@ -706,10 +1010,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             };
 
             recognition.onerror = (event: any) => {
-                if (event.error === 'no-speech') {
-                    // Normal in continuous mode when no speech detected
-                    return;
-                }
+                if (event.error === 'no-speech') return;
                 if (event.error === 'not-allowed') {
                     setNeedsMicPermission(true);
                     setVoiceError('Microphone permission required. Click "Allow Microphone" to enable hands-free voice.');
@@ -721,7 +1022,6 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
             recognition.onend = () => {
                 setIsListening(false);
-                // Automatically restart continuous listening if modal is still open
                 if (!isManuallyStoppedRef.current && isOpen) {
                     setTimeout(() => {
                         if (!isManuallyStoppedRef.current && isOpen) {
@@ -737,14 +1037,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         } catch (err) {
             console.warn('[Speech Recognition Init Error]:', err);
         }
-    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handleFindingNotesSubmit, handleRetakeNotes, handleResetFinding, handlePhotoChoice, handlePhotoNotesSubmit, syncToParent, isOpen]);
+    }, [advanceToNextStep, handlePreviousStep, handleRepeatAudio, handlePauseAndSave, handleSelectStatus, handleFindingNotesSubmit, handleRetakeNotes, handleResetFinding, handlePhotoChoice, handlePhotoNotesSubmit, handleTyreDepthsSubmit, handleTyreCommentSubmit, handleRetakeTyreDepths, handleRetakeTyreComment, handleNextTyre, handlePreviousTyre, syncToParent, isOpen]);
 
     // Request Mic Permission & Start
     const handleEnableMicrophone = async () => {
         try {
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // Release audio tracks so SpeechRecognition has full access
                 stream.getTracks().forEach(track => track.stop());
             }
             setNeedsMicPermission(false);
@@ -799,7 +1098,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
     }, [isOpen]);
 
-    // On modal open: pick up from where left off (resume point) - executes ONCE on open
+    // On modal open: pick up from where left off (resume point)
     useEffect(() => {
         if (!isOpen) {
             hasInitialSpokenRef.current = false;
@@ -835,11 +1134,22 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     const currentStep = steps[currentStepIndex];
     const totalSteps = steps.length;
-    const isLastStep = currentStepIndex === totalSteps - 1;
+    const isLastChecklistStep = currentStepIndex === totalSteps - 1;
+
+    const activeTyreLoc = TYRE_KEYS[currentTyreIndex];
+    const activeTyreData = tyres[activeTyreLoc] || { indicator: 'na' };
+
+    // Stats
+    const recordedChecklistCount = steps.filter(s => s.status === 'ok' || s.status === 'attention' || s.status === 'urgent').length;
+    const recordedTyresCount = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight'].filter(k => {
+        const t = tyres[k as TyreLocation];
+        return t && (t.outer !== undefined || t.middle !== undefined || t.inner !== undefined);
+    }).length;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 backdrop-blur-sm p-3 sm:p-4 animate-fade-in">
-            <div className="bg-white rounded-3xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/75 backdrop-blur-sm p-2 sm:p-4 animate-fade-in">
+            <div className="bg-white rounded-3xl max-w-3xl w-full border border-slate-200 shadow-2xl overflow-hidden flex flex-col max-h-[94vh]">
+                
                 {/* Header */}
                 <div className="p-4 sm:p-5 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between border-b border-slate-800">
                     <div className="flex items-center gap-3">
@@ -848,26 +1158,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         </div>
                         <div>
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h3 className="font-black text-base sm:text-lg tracking-tight">Guided Inspection Host</h3>
+                                <h3 className="font-black text-base sm:text-lg tracking-tight">Guided Vehicle Inspection</h3>
                                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 uppercase tracking-wide">
                                     Hands-Free Voice
                                 </span>
                             </div>
                             <p className="text-xs text-slate-400">
-                                {vehicleRegistration ? `${vehicleRegistration} ${vehicleModel ? `• ${vehicleModel}` : ''}` : 'Interactive read-aloud vehicle inspection walkthrough'}
+                                {vehicleRegistration ? `${vehicleRegistration} ${vehicleModel ? `• ${vehicleModel}` : ''}` : 'Step-by-step checklist & tyre inspection walkthrough'}
                             </p>
                         </div>
                     </div>
 
                     {/* Audio & Mic Controls in Header */}
                     <div className="flex items-center gap-2">
-                        {/* TTS Voice Toggle */}
                         <button
                             type="button"
                             onClick={() => {
-                                if (isTtsEnabled) {
-                                    cloudSpeechSynthesis.cancel();
-                                }
+                                if (isTtsEnabled) cloudSpeechSynthesis.cancel();
                                 setIsTtsEnabled(!isTtsEnabled);
                             }}
                             className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${isTtsEnabled
@@ -880,21 +1187,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             <span className="hidden sm:inline">{isTtsEnabled ? 'Voice On' : 'Muted'}</span>
                         </button>
 
-                        {/* Hands-Free Mic Toggle */}
-                        {isSpeechRecognitionSupported && (
-                            <button
-                                type="button"
-                                onClick={handleToggleVoiceControl}
-                                className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${isVoiceControlActive && isListening
-                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30'
-                                        : 'bg-white/10 text-slate-400 hover:text-white'
-                                    }`}
-                                title={isVoiceControlActive ? 'Pause Hands-Free Voice' : 'Resume Hands-Free Voice'}
-                            >
-                                {isVoiceControlActive && isListening ? <Mic size={16} className="text-emerald-400 animate-pulse" /> : <MicOff size={16} />}
-                                <span className="hidden sm:inline">{isVoiceControlActive && isListening ? 'Mic Active' : 'Mic Off'}</span>
-                            </button>
-                        )}
+                        <button
+                            type="button"
+                            onClick={handleToggleVoiceControl}
+                            className={`p-2 rounded-xl transition flex items-center gap-1.5 text-xs font-bold cursor-pointer ${isVoiceControlActive
+                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 hover:bg-emerald-500/30'
+                                    : 'bg-rose-500/20 text-rose-300 border border-rose-400/30 hover:bg-rose-500/30'
+                                }`}
+                            title={isVoiceControlActive ? 'Mute Microphone' : 'Enable Microphone'}
+                        >
+                            {isVoiceControlActive ? <Mic size={16} /> : <MicOff size={16} />}
+                            <span className="hidden sm:inline">{isVoiceControlActive ? 'Mic Listening' : 'Mic Muted'}</span>
+                        </button>
 
                         <button
                             type="button"
@@ -907,31 +1211,70 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     </div>
                 </div>
 
-                {/* Progress Bar & Status Line */}
-                <div className="w-full bg-slate-100 h-2">
-                    <div
-                        className="bg-indigo-600 h-2 transition-all duration-300"
-                        style={{ width: `${((currentStepIndex + 1) / totalSteps) * 100}%` }}
-                    />
-                </div>
-
-                {/* Resume Status Notification Banner */}
-                {currentStepIndex > 0 && (
-                    <div className="bg-indigo-50 border-b border-indigo-100 px-4 py-1.5 flex items-center justify-between text-xs text-indigo-900">
-                        <div className="flex items-center gap-2">
-                            <span className="font-bold text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded">Resume Point</span>
-                            <span>Picked up from Question {currentStepIndex + 1} of {totalSteps}</span>
-                        </div>
+                {/* Inspection Stage Switcher Tabs */}
+                <div className="bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center justify-between gap-2 overflow-x-auto">
+                    <div className="flex items-center gap-1.5">
                         <button
                             type="button"
-                            onClick={() => handleJumpToStep(1)}
-                            className="text-[11px] text-indigo-600 hover:text-indigo-900 font-bold underline cursor-pointer flex items-center gap-1"
+                            onClick={() => {
+                                setMode('checklist');
+                                readCurrentStep(currentStepIndex);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${mode === 'checklist'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
                         >
-                            <RefreshCw size={11} />
-                            <span>Start over from Question #1</span>
+                            <ListFilter size={14} />
+                            <span>Checklist ({recordedChecklistCount}/{totalSteps})</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMode('tyres');
+                                readCurrentTyre(currentTyreIndex, tyreSubStep);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${mode === 'tyres'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                        >
+                            <Disc size={14} />
+                            <span>Tyre Report ({recordedTyresCount}/4)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setMode('summary');
+                                speakText("Inspection and tyre summary report.");
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-2 cursor-pointer ${mode === 'summary'
+                                ? 'bg-indigo-600 text-white shadow-xs'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
+                        >
+                            <FileText size={14} />
+                            <span>Summary & Log</span>
                         </button>
                     </div>
-                )}
+
+                    <div className="text-[11px] text-slate-400 font-medium hidden sm:block">
+                        {mode === 'checklist' ? `Question ${currentStepIndex + 1} of ${totalSteps}` : mode === 'tyres' ? `Tyre ${currentTyreIndex + 1} of 4` : 'Review Inspection'}
+                    </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-100 h-1.5">
+                    <div
+                        className="bg-indigo-600 h-1.5 transition-all duration-300"
+                        style={{
+                            width: mode === 'checklist'
+                                ? `${((currentStepIndex + 1) / totalSteps) * 100}%`
+                                : mode === 'tyres'
+                                    ? `${((currentTyreIndex + 1) / 4) * 100}%`
+                                    : '100%'
+                        }}
+                    />
+                </div>
 
                 {/* Real-time Voice Status Pill / Banner */}
                 <div className="bg-slate-900 text-slate-200 px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs font-medium">
@@ -953,13 +1296,17 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     </span>
                                 ) : (
                                     <span className="truncate">
-                                        {subStep === 'findingNotes'
-                                            ? 'Listening for observations... Speak notes, or say "Done" / "Retake"'
-                                            : subStep === 'photoPrompt'
-                                                ? 'Listening... Say "Yes" or "No" for photo'
-                                                : subStep === 'photoNotes'
-                                                    ? 'Listening for photo details... Say notes, or "Done" / "Retake"'
-                                                    : 'Listening... Say "OK", "Attention", "Urgent", or "Next"'}
+                                        {mode === 'tyres'
+                                            ? tyreSubStep === 'depths'
+                                                ? 'Listening for depths... Say 3 numbers, e.g. "6 6 5" or "5 across"'
+                                                : 'Listening for tyre comments... Speak comment (e.g. "Nail in tyre") or say "None"'
+                                            : subStep === 'findingNotes'
+                                                ? 'Listening for observations... Speak notes, or say "Done" / "Retake"'
+                                                : subStep === 'photoPrompt'
+                                                    ? 'Listening... Say "Yes" or "No" for photo'
+                                                    : subStep === 'photoNotes'
+                                                        ? 'Listening for photo details... Say notes, or "Done" / "Retake"'
+                                                        : 'Listening... Say "OK", "Attention", "Urgent", or "Next"'}
                                     </span>
                                 )}
                             </div>
@@ -969,489 +1316,683 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 <span>Voice control off. Click the mic button to turn on.</span>
                             </div>
                         )}
-
-                        {lastHeardCommand && (
-                            <span className="hidden sm:inline-flex items-center gap-1 bg-white/10 px-2 py-0.5 rounded text-[11px] text-emerald-300 font-semibold flex-shrink-0">
-                                🎯 {lastHeardCommand}
-                            </span>
-                        )}
                     </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                            type="button"
-                            onClick={handleRepeatAudio}
-                            className="p-1 hover:bg-white/10 text-slate-300 hover:text-white rounded flex items-center gap-1 text-[11px] font-bold transition cursor-pointer"
-                            title="Repeat Question Audio"
-                        >
-                            <RotateCcw size={12} />
-                            <span>Repeat</span>
-                        </button>
-                    </div>
+                    {lastHeardCommand && (
+                        <div className="flex items-center gap-1.5 bg-slate-800 px-2.5 py-1 rounded-full text-[11px] text-emerald-300 border border-slate-700 shrink-0">
+                            <CheckCheck size={12} className="text-emerald-400" />
+                            <span className="truncate max-w-[200px]">{lastHeardCommand}</span>
+                        </div>
+                    )}
                 </div>
 
-                {/* Mic Permission Banner if blocked */}
+                {/* Mic Permission Banner */}
                 {needsMicPermission && (
-                    <div className="bg-amber-500 text-slate-900 px-4 py-2 text-xs font-bold flex items-center justify-between border-b border-amber-600">
+                    <div className="p-3 bg-amber-500/15 border-b border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-3">
                         <div className="flex items-center gap-2">
-                            <AlertCircle size={16} />
-                            <span>Microphone access needed for hands-free voice control.</span>
+                            <AlertCircle size={16} className="text-amber-400 shrink-0" />
+                            <span>Microphone permission required for hands-free voice commands.</span>
                         </div>
                         <button
                             type="button"
                             onClick={handleEnableMicrophone}
-                            className="px-3 py-1 bg-slate-900 text-white rounded-lg text-xs font-black shadow-xs hover:bg-slate-800 transition cursor-pointer"
+                            className="px-3 py-1 bg-amber-500 text-slate-900 rounded-lg text-xs font-bold hover:bg-amber-400 transition"
                         >
                             Allow Microphone
                         </button>
                     </div>
                 )}
 
-                {voiceError && !needsMicPermission && (
-                    <div className="bg-amber-50 text-amber-900 px-4 py-1.5 text-xs font-semibold border-b border-amber-200 flex items-center justify-between">
-                        <span>⚠️ {voiceError}</span>
-                        <button
-                            type="button"
-                            onClick={() => setVoiceError(null)}
-                            className="text-amber-700 hover:text-amber-950 underline font-bold ml-2 cursor-pointer"
-                        >
-                            Dismiss
-                        </button>
-                    </div>
-                )}
-
-                {/* Main Content Area */}
-                <div className="p-4 sm:p-6 overflow-y-auto space-y-5 flex-1">
-                    {/* Section Badge & Question Card */}
-                    <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3.5 shadow-sm">
-                        <div className="flex items-center justify-between">
-                            <span className="text-xs font-black uppercase tracking-wider text-indigo-700 bg-indigo-100 px-2.5 py-1 rounded-lg">
-                                {currentStep.sectionTitle}
-                            </span>
-                            <span className="text-xs font-bold text-slate-500">
-                                Question {currentStepIndex + 1} of {totalSteps}
-                            </span>
-                        </div>
-
-                        <div className="flex items-start justify-between gap-3">
-                            <h2 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
-                                {currentStep.itemLabel}
-                            </h2>
+                {/* --- MODE 1: CHECKLIST QUESTION VIEW --- */}
+                {mode === 'checklist' && (
+                    <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+                        {/* Section & Question Badge */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <span className="px-3 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-black uppercase tracking-wider">
+                                    {currentStep.sectionTitle}
+                                </span>
+                                <span className="text-xs font-bold text-slate-500">
+                                    Question {currentStepIndex + 1} of {totalSteps}
+                                </span>
+                            </div>
                             <button
                                 type="button"
                                 onClick={handleRepeatAudio}
-                                className="p-2 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-indigo-600 transition shadow-xs flex-shrink-0 cursor-pointer"
-                                title="Read question aloud"
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                title="Replay question audio"
                             >
-                                <Volume2 size={18} />
+                                <Volume2 size={14} className="text-indigo-600" />
+                                <span>Replay Audio</span>
                             </button>
                         </div>
 
-                        {/* Status Selection Buttons */}
-                        <div className="pt-2">
-                            <div className="flex items-center justify-between mb-2">
-                                <p className="text-xs font-bold text-slate-600 uppercase tracking-wide">
-                                    Record Finding:
-                                </p>
-                                <span className="text-[11px] text-slate-600 font-semibold italic">
-                                    (Say: &ldquo;OK&rdquo; / &ldquo;Pass&rdquo;, &ldquo;Attention&rdquo;, &ldquo;Urgent&rdquo;)
-                                </span>
-                            </div>
+                        {/* Large Primary Question Banner */}
+                        <div className="p-5 bg-gradient-to-br from-indigo-50/70 via-white to-slate-50 rounded-2xl border border-indigo-100/80 shadow-xs space-y-2">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600">Active Inspection Step</span>
+                            <h2 className="text-xl sm:text-2xl font-black text-slate-900 leading-snug">
+                                {currentStep.itemLabel}
+                            </h2>
+                        </div>
+
+                        {/* SUB-STEP A: Mark Status (Pass / Attention / Urgent / NA) */}
+                        <div className="space-y-3">
+                            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center justify-between">
+                                <span>Step 1: Record Condition (Say or Click)</span>
+                                {currentStep.status && currentStep.status !== 'na' && (
+                                    <button
+                                        type="button"
+                                        onClick={handleResetFinding}
+                                        className="text-indigo-600 hover:text-indigo-800 text-xs font-bold flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <RotateCcw size={12} />
+                                        <span>Change Finding</span>
+                                    </button>
+                                )}
+                            </label>
+
                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('ok')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'ok'
-                                            ? 'bg-emerald-500 text-white border-emerald-600 shadow-md ring-2 ring-emerald-300'
-                                            : 'bg-white hover:bg-emerald-50 text-emerald-800 border-slate-200 hover:border-emerald-300'
+                                    className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer text-center ${currentStep.status === 'ok'
+                                        ? 'bg-emerald-500 text-white border-emerald-600 shadow-md scale-[1.02]'
+                                        : 'bg-white hover:bg-emerald-50 border-slate-200 text-slate-800 hover:border-emerald-300'
                                         }`}
                                 >
-                                    <Check size={18} />
-                                    <span>OK / Pass</span>
+                                    <div className={`p-2 rounded-xl ${currentStep.status === 'ok' ? 'bg-white/20' : 'bg-emerald-100 text-emerald-700'}`}>
+                                        <Check size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="font-black text-sm block">Pass / OK</span>
+                                        <span className={`text-[10px] ${currentStep.status === 'ok' ? 'text-emerald-100' : 'text-slate-500'}`}>Say &ldquo;OK&rdquo; or &ldquo;Pass&rdquo;</span>
+                                    </div>
                                 </button>
+
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('attention')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'attention'
-                                            ? 'bg-amber-500 text-white border-amber-600 shadow-md ring-2 ring-amber-300'
-                                            : 'bg-white hover:bg-amber-50 text-amber-800 border-slate-200 hover:border-amber-300'
+                                    className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer text-center ${currentStep.status === 'attention'
+                                        ? 'bg-amber-500 text-white border-amber-600 shadow-md scale-[1.02]'
+                                        : 'bg-white hover:bg-amber-50 border-slate-200 text-slate-800 hover:border-amber-300'
                                         }`}
                                 >
-                                    <AlertTriangle size={18} />
-                                    <span>Attention</span>
+                                    <div className={`p-2 rounded-xl ${currentStep.status === 'attention' ? 'bg-white/20' : 'bg-amber-100 text-amber-700'}`}>
+                                        <AlertTriangle size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="font-black text-sm block">Attention</span>
+                                        <span className={`text-[10px] ${currentStep.status === 'attention' ? 'text-amber-100' : 'text-slate-500'}`}>Say &ldquo;Attention&rdquo;</span>
+                                    </div>
                                 </button>
+
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('urgent')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'urgent'
-                                            ? 'bg-red-500 text-white border-red-600 shadow-md ring-2 ring-red-300'
-                                            : 'bg-white hover:bg-red-50 text-red-800 border-slate-200 hover:border-red-300'
+                                    className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer text-center ${currentStep.status === 'urgent'
+                                        ? 'bg-red-500 text-white border-red-600 shadow-md scale-[1.02]'
+                                        : 'bg-white hover:bg-red-50 border-slate-200 text-slate-800 hover:border-red-300'
                                         }`}
                                 >
-                                    <XCircle size={18} />
-                                    <span>Urgent</span>
+                                    <div className={`p-2 rounded-xl ${currentStep.status === 'urgent' ? 'bg-white/20' : 'bg-red-100 text-red-700'}`}>
+                                        <XCircle size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="font-black text-sm block">Urgent</span>
+                                        <span className={`text-[10px] ${currentStep.status === 'urgent' ? 'text-red-100' : 'text-slate-500'}`}>Say &ldquo;Urgent&rdquo; or &ldquo;Fail&rdquo;</span>
+                                    </div>
                                 </button>
+
                                 <button
                                     type="button"
                                     onClick={() => handleSelectStatus('na')}
-                                    className={`p-3.5 rounded-xl border-2 flex items-center justify-center gap-2 text-xs font-black transition cursor-pointer ${currentStep.status === 'na'
-                                            ? 'bg-slate-500 text-white border-slate-600 shadow-md ring-2 ring-slate-300'
-                                            : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200 hover:border-slate-300'
+                                    className={`p-3.5 rounded-2xl border-2 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer text-center ${currentStep.status === 'na'
+                                        ? 'bg-slate-500 text-white border-slate-600 shadow-md scale-[1.02]'
+                                        : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800 hover:border-slate-300'
                                         }`}
                                 >
-                                    <HelpCircle size={18} />
-                                    <span>N/A</span>
+                                    <div className={`p-2 rounded-xl ${currentStep.status === 'na' ? 'bg-white/20' : 'bg-slate-100 text-slate-600'}`}>
+                                        <HelpCircle size={20} />
+                                    </div>
+                                    <div>
+                                        <span className="font-black text-sm block">N/A</span>
+                                        <span className={`text-[10px] ${currentStep.status === 'na' ? 'text-slate-200' : 'text-slate-500'}`}>Say &ldquo;N A&rdquo; or &ldquo;Skip&rdquo;</span>
+                                    </div>
                                 </button>
                             </div>
                         </div>
 
-                        {/* General Finding Notes Field */}
-                        {subStep === 'answer' && (
-                            <div className="pt-2">
-                                <label className="text-xs font-bold text-slate-500 block mb-1">
-                                    Engineer Notes / Observations:
-                                </label>
+                        {/* SUB-STEP B: Observation Notes (mandatory on Attention/Urgent) */}
+                        {(subStep === 'findingNotes' || (currentStep.status !== 'na' && currentStep.comment)) && (
+                            <div className="p-4 bg-amber-50/60 border border-amber-200/80 rounded-2xl space-y-2.5 animate-fade-in">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                        <AlertTriangle size={14} className="text-amber-600" />
+                                        <span>Observation Notes</span>
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={handleRetakeNotes}
+                                        className="text-[11px] font-bold text-amber-800 hover:text-amber-950 flex items-center gap-1 bg-amber-100 px-2 py-0.5 rounded cursor-pointer"
+                                        title="Clear notes and speak again"
+                                    >
+                                        <RotateCcw size={11} />
+                                        <span>Retake Note</span>
+                                    </button>
+                                </div>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="text"
                                         value={currentStep.comment || ''}
                                         onChange={e => handleCommentChange(e.target.value)}
-                                        placeholder="Add specific observations, wear levels, or defect details..."
-                                        className="flex-1 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-indigo-500 outline-none"
+                                        placeholder="Describe finding or defect..."
+                                        className="flex-1 p-2.5 bg-white border border-amber-300 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-amber-500"
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleFindingNotesSubmit(currentStep.comment || '');
+                                        }}
                                     />
                                     <SpeechToTextButton
-                                        onTranscript={text => handleCommentChange(currentStep.comment ? `${currentStep.comment} ${text}` : text)}
+                                        onTranscript={(text) => {
+                                            const existing = currentStep.comment || '';
+                                            const newComment = existing ? `${existing} ${text}` : text;
+                                            handleCommentChange(newComment);
+                                        }}
+                                        className="!p-2.5 bg-white border border-amber-300 hover:bg-amber-100 text-amber-800"
                                     />
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Step: Finding Observation Notes Sub-Step for Attention & Urgent */}
-                    {subStep === 'findingNotes' && (
-                        <div className={`p-4 rounded-2xl border-2 space-y-3.5 animate-fade-in shadow-sm ${currentStep.status === 'urgent'
-                                ? 'bg-red-50 border-red-300'
-                                : 'bg-amber-50 border-amber-300'
-                            }`}>
-                            <div className="flex items-center justify-between">
-                                <div className={`flex items-center gap-2 font-black text-xs uppercase tracking-wide ${currentStep.status === 'urgent' ? 'text-red-900' : 'text-amber-900'
-                                    }`}>
-                                    {currentStep.status === 'urgent' ? (
-                                        <XCircle size={18} className="text-red-600" />
-                                    ) : (
-                                        <AlertTriangle size={18} className="text-amber-600" />
-                                    )}
-                                    <span>
-                                        {currentStep.status === 'urgent' ? 'Record Urgent Defect Notes' : 'Record Attention / Advisory Notes'}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={handleResetFinding}
-                                        className="text-[11px] text-slate-500 hover:text-slate-800 underline font-semibold cursor-pointer"
-                                    >
-                                        Change Finding
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <input
-                                    type="text"
-                                    autoFocus
-                                    value={currentStep.comment || ''}
-                                    onChange={e => handleCommentChange(e.target.value)}
-                                    placeholder={
-                                        currentStep.status === 'urgent'
-                                            ? "Describe urgent issue (e.g. OSF brake pad metal-to-metal, severe coolant leak)..."
-                                            : "Describe condition (e.g. inner pad 3mm, slight play in ball joint)..."
-                                    }
-                                    className={`flex-1 px-3.5 py-2.5 bg-white border rounded-xl text-xs sm:text-sm font-semibold outline-none focus:ring-2 shadow-xs ${currentStep.status === 'urgent'
-                                            ? 'border-red-300 focus:ring-red-500 text-red-950'
-                                            : 'border-amber-300 focus:ring-amber-500 text-amber-950'
-                                        }`}
-                                    onKeyDown={e => {
-                                        if (e.key === 'Enter') {
-                                            handleFindingNotesSubmit(currentStep.comment || '');
-                                        }
-                                    }}
-                                />
-                                <SpeechToTextButton
-                                    onTranscript={text => {
-                                        const existing = currentStep.comment || '';
-                                        const updated = existing ? `${existing} ${text}` : text;
-                                        handleCommentChange(updated);
-                                    }}
-                                />
-                            </div>
-
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 pt-1">
-                                <span className={`text-[11px] font-medium ${currentStep.status === 'urgent' ? 'text-red-700' : 'text-amber-700'
-                                    }`}>
-                                    🎙️ Speak your observations now. If misheard, say &ldquo;Retake&rdquo; or click Retake Note.
-                                </span>
-                                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-                                    {/* Retake Note Button */}
-                                    <button
-                                        type="button"
-                                        onClick={handleRetakeNotes}
-                                        className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                        title="Clear notes and speak again"
-                                    >
-                                        <RotateCcw size={14} className="text-amber-600" />
-                                        <span>Retake Note</span>
-                                    </button>
-
                                     <button
                                         type="button"
                                         onClick={() => handleFindingNotesSubmit(currentStep.comment || '')}
-                                        className={`px-4 py-2 text-white rounded-xl text-xs font-black transition shadow-sm flex items-center gap-1.5 cursor-pointer flex-shrink-0 ${currentStep.status === 'urgent'
-                                                ? 'bg-red-600 hover:bg-red-700'
-                                                : 'bg-amber-600 hover:bg-amber-700'
-                                            }`}
+                                        className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition cursor-pointer shrink-0"
                                     >
-                                        <span>Save Notes & Check Photo</span>
-                                        <ArrowRight size={14} />
+                                        Save Note
                                     </button>
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Step: Photo Prompt Sub-Step */}
-                    {subStep === 'photoPrompt' && (
-                        <div className="p-4 bg-indigo-50 border-2 border-indigo-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in shadow-xs">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl flex-shrink-0">
-                                    <Camera size={22} />
+                        {/* SUB-STEP C: Photo Prompt */}
+                        {(subStep === 'photoPrompt' || subStep === 'photoNotes' || currentStep.photoRequired !== undefined) && (
+                            <div className="p-4 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl space-y-3 animate-fade-in">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                                        <Camera size={15} className="text-indigo-600" />
+                                        <span>Photo Requirement</span>
+                                    </span>
                                 </div>
-                                <div>
-                                    <h4 className="font-black text-sm text-indigo-950">
-                                        Do you need a photo for this step?
-                                    </h4>
-                                    <p className="text-xs text-indigo-700 font-medium">
-                                        Say <span className="font-bold underline">&ldquo;Yes&rdquo;</span> or <span className="font-bold underline">&ldquo;No&rdquo;</span> hands-free, or click below.
-                                    </p>
+
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePhotoChoice(true)}
+                                        className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition ${currentStep.photoRequired
+                                            ? 'bg-indigo-600 text-white border-indigo-700 shadow-xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-indigo-50'}`}
+                                    >
+                                        <Camera size={14} />
+                                        <span>Yes, Photo Required (Say &ldquo;Yes&rdquo;)</span>
+                                    </button>
+
+                                    <button
+                                        type="button"
+                                        onClick={() => handlePhotoChoice(false)}
+                                        className={`flex-1 py-2.5 px-3 rounded-xl border text-xs font-black flex items-center justify-center gap-1.5 cursor-pointer transition ${currentStep.photoRequired === false
+                                            ? 'bg-slate-700 text-white border-slate-800 shadow-xs'
+                                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'}`}
+                                    >
+                                        <span>No Photo (Say &ldquo;No&rdquo;)</span>
+                                    </button>
                                 </div>
+
+                                {currentStep.photoRequired && (
+                                    <div className="pt-2 flex items-center gap-2 animate-fade-in">
+                                        <input
+                                            type="text"
+                                            value={currentStep.photoNotes || ''}
+                                            onChange={e => {
+                                                const updated = [...stepsRef.current];
+                                                updated[currentStepIndexRef.current] = {
+                                                    ...updated[currentStepIndexRef.current],
+                                                    photoNotes: e.target.value
+                                                };
+                                                setSteps(updated);
+                                                syncToParent(updated);
+                                            }}
+                                            placeholder="Photo instructions (e.g. Close-up of damage)..."
+                                            className="flex-1 p-2 bg-white border border-indigo-300 rounded-xl text-xs font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                            onKeyDown={e => {
+                                                if (e.key === 'Enter') handlePhotoNotesSubmit(currentStep.photoNotes || '');
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={handleRetakeNotes}
+                                            className="text-[11px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-2.5 py-2 rounded-xl cursor-pointer"
+                                            title="Clear photo notes"
+                                        >
+                                            <RotateCcw size={12} />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex items-center gap-2 w-full sm:w-auto">
-                                <button
-                                    type="button"
-                                    onClick={() => handlePhotoChoice(true)}
-                                    className="flex-1 sm:flex-none px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs cursor-pointer"
-                                >
-                                    Yes (Require Photo)
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePhotoChoice(false)}
-                                    className="flex-1 sm:flex-none px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition cursor-pointer"
-                                >
-                                    No (Proceed)
-                                </button>
+                        )}
+                    </div>
+                )}
+
+                {/* --- MODE 2: TYRE CHECK REPORT VIEW --- */}
+                {mode === 'tyres' && (
+                    <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-5">
+                        {/* Tyre Stage Header */}
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div>
+                                <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600 block">Tyre Depth & Condition Report</span>
+                                <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                                    {TYRE_META[activeTyreLoc].name}
+                                </h2>
+                                <span className="text-xs text-slate-500 font-medium">Position: {TYRE_META[activeTyreLoc].position}</span>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={handleRepeatAudio}
+                                className="px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                            >
+                                <Volume2 size={14} className="text-indigo-600" />
+                                <span>Replay Audio</span>
+                            </button>
+                        </div>
+
+                        {/* Interactive Vehicle Tyre Formation */}
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-2 text-center">Select Tyre Location</span>
+                            <div className="grid grid-cols-2 gap-2 sm:gap-3 max-w-md mx-auto">
+                                {(['frontLeft', 'frontRight', 'rearLeft', 'rearRight'] as TyreLocation[]).map((locKey, idx) => {
+                                    const meta = TYRE_META[locKey];
+                                    const data = tyres[locKey];
+                                    const isSelected = activeTyreLoc === locKey;
+                                    const st = data?.indicator || 'na';
+                                    const cfg = statusConfig[st];
+                                    return (
+                                        <button
+                                            key={locKey}
+                                            type="button"
+                                            onClick={() => handleJumpToTyre(idx)}
+                                            className={`p-3 rounded-xl border-2 transition-all flex items-center justify-between gap-2 cursor-pointer ${isSelected
+                                                ? 'bg-indigo-50 border-indigo-600 shadow-md scale-[1.02]'
+                                                : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                                        >
+                                            <div className="text-left">
+                                                <span className="font-black text-xs block text-slate-900">{meta.short} - {meta.name.split(' ')[0]}</span>
+                                                <span className="text-[11px] font-mono text-slate-500">
+                                                    {data?.outer !== undefined ? `O:${data.outer} M:${data.middle} I:${data.inner} mm` : 'Not recorded'}
+                                                </span>
+                                            </div>
+                                            <span className={`w-3 h-3 rounded-full ${cfg.bg} shrink-0 ring-2 ring-white`} title={cfg.label} />
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
-                    )}
 
-                    {/* Step: Photo Notes Sub-Step */}
-                    {subStep === 'photoNotes' && (
-                        <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-2xl space-y-3 animate-fade-in">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-amber-900 font-bold text-xs uppercase">
-                                    <Camera size={16} className="text-amber-600" />
-                                    <span>Photo Flagged for Step #{currentStepIndex + 1}</span>
+                        {/* Active Tyre Input Card */}
+                        <div className="p-4 sm:p-5 bg-gradient-to-br from-indigo-50/50 via-white to-slate-50 rounded-2xl border border-indigo-100 shadow-xs space-y-4">
+                            
+                            {/* Tread Depth Inputs (Outer, Middle, Inner) */}
+                            <div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                                        <Gauge size={14} className="text-indigo-600" />
+                                        <span>Tread Depths (mm): Outer • Middle • Inner</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={handleRetakeTyreDepths}
+                                        className="text-[11px] font-bold text-indigo-700 bg-indigo-100 hover:bg-indigo-200 px-2 py-0.5 rounded cursor-pointer flex items-center gap-1"
+                                    >
+                                        <RotateCcw size={11} />
+                                        <span>Retake Depths</span>
+                                    </button>
                                 </div>
-                                <span className="text-[11px] text-amber-700 font-semibold italic">
-                                    (Dictate notes or say &ldquo;Next&rdquo; when ready)
+
+                                <div className="grid grid-cols-3 gap-2.5 sm:gap-4">
+                                    <div>
+                                        <span className="text-[11px] font-bold text-slate-500 block mb-1 text-center">Outer Edge</span>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="30"
+                                            value={activeTyreData.outer ?? ''}
+                                            onChange={e => handleManualTyreUpdate(activeTyreLoc, 'outer', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="e.g. 5.5"
+                                            className={`w-full p-3 border-2 rounded-xl text-center text-lg font-black text-slate-900 bg-white outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                                activeTyreData.outer !== undefined
+                                                    ? activeTyreData.outer <= 1.6 ? 'border-red-400 bg-red-50/30' : activeTyreData.outer < 3.0 ? 'border-amber-400 bg-amber-50/30' : 'border-emerald-400 bg-emerald-50/30'
+                                                    : 'border-slate-300'
+                                            }`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <span className="text-[11px] font-bold text-slate-500 block mb-1 text-center">Middle Tread</span>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="30"
+                                            value={activeTyreData.middle ?? ''}
+                                            onChange={e => handleManualTyreUpdate(activeTyreLoc, 'middle', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="e.g. 5.0"
+                                            className={`w-full p-3 border-2 rounded-xl text-center text-lg font-black text-slate-900 bg-white outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                                activeTyreData.middle !== undefined
+                                                    ? activeTyreData.middle <= 1.6 ? 'border-red-400 bg-red-50/30' : activeTyreData.middle < 3.0 ? 'border-amber-400 bg-amber-50/30' : 'border-emerald-400 bg-emerald-50/30'
+                                                    : 'border-slate-300'
+                                            }`}
+                                        />
+                                    </div>
+                                    <div>
+                                        <span className="text-[11px] font-bold text-slate-500 block mb-1 text-center">Inner Edge</span>
+                                        <input
+                                            type="number"
+                                            step="0.1"
+                                            min="0"
+                                            max="30"
+                                            value={activeTyreData.inner ?? ''}
+                                            onChange={e => handleManualTyreUpdate(activeTyreLoc, 'inner', e.target.value === '' ? undefined : parseFloat(e.target.value))}
+                                            placeholder="e.g. 4.5"
+                                            className={`w-full p-3 border-2 rounded-xl text-center text-lg font-black text-slate-900 bg-white outline-none focus:ring-2 focus:ring-indigo-500 ${
+                                                activeTyreData.inner !== undefined
+                                                    ? activeTyreData.inner <= 1.6 ? 'border-red-400 bg-red-50/30' : activeTyreData.inner < 3.0 ? 'border-amber-400 bg-amber-50/30' : 'border-emerald-400 bg-emerald-50/30'
+                                                    : 'border-slate-300'
+                                            }`}
+                                        />
+                                    </div>
+                                </div>
+                                <span className="text-[11px] text-slate-500 block mt-1.5 text-center">
+                                    Legal limit: 1.6mm (Urgent) • Advisory wear: &lt; 3.0mm (Attention) • Good: &ge; 3.0mm (Pass)
                                 </span>
                             </div>
-                            <input
-                                type="text"
-                                value={currentStep.photoNotes || ''}
-                                onChange={e => {
-                                    const stepIdx = currentStepIndex;
-                                    const updated = [...steps];
-                                    updated[stepIdx] = {
-                                        ...updated[stepIdx],
-                                        photoNotes: e.target.value
-                                    };
-                                    setSteps(updated);
-                                }}
-                                placeholder="Describe what the photo should show (e.g. inner pad wear, oil seepage at sump)..."
-                                className="w-full px-3 py-2 bg-white border border-amber-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none"
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter') {
-                                        handlePhotoNotesSubmit(e.currentTarget.value);
-                                    }
-                                }}
-                            />
-                            <div className="flex items-center justify-between gap-2 pt-1">
-                                <button
-                                    type="button"
-                                    onClick={handleRetakeNotes}
-                                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                                    title="Clear photo notes and speak again"
-                                >
-                                    <RotateCcw size={14} className="text-amber-600" />
-                                    <span>Retake Note</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handlePhotoNotesSubmit(currentStep.photoNotes || '')}
-                                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>Save Notes & Continue</span>
-                                    <ArrowRight size={14} />
-                                </button>
+
+                            {/* Status Override Selector */}
+                            <div className="space-y-1.5">
+                                <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block">Condition Status</label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {(['ok', 'attention', 'urgent', 'na'] as ChecklistItemStatus[]).map(st => {
+                                        const cfg = statusConfig[st];
+                                        const isSel = activeTyreData.indicator === st;
+                                        return (
+                                            <button
+                                                key={st}
+                                                type="button"
+                                                onClick={() => handleManualTyreUpdate(activeTyreLoc, 'indicator', st)}
+                                                className={`py-2 px-1 rounded-xl text-xs font-black border transition flex items-center justify-center gap-1.5 cursor-pointer ${isSel
+                                                    ? `${cfg.bg} text-white ${cfg.border} shadow-xs`
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'}`}
+                                            >
+                                                <cfg.icon size={13} />
+                                                <span>{st === 'ok' ? 'Pass' : st === 'attention' ? 'Attention' : st === 'urgent' ? 'Urgent' : 'N/A'}</span>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Comments / Damage Remarks */}
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
+                                        <span>Tyre Comments & Defects</span>
+                                    </label>
+                                    <button
+                                        type="button"
+                                        onClick={handleRetakeTyreComment}
+                                        className="text-[11px] font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
+                                    >
+                                        Clear Comment
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={activeTyreData.comments || ''}
+                                        onChange={e => handleManualTyreUpdate(activeTyreLoc, 'comments', e.target.value)}
+                                        placeholder="e.g. Nail in outer edge, cuts on sidewall, low pressure..."
+                                        className="flex-1 p-2.5 bg-white border border-slate-300 rounded-xl text-sm font-medium text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter') handleTyreCommentSubmit(activeTyreData.comments || '');
+                                        }}
+                                    />
+                                    <SpeechToTextButton
+                                        onTranscript={(text) => {
+                                            const existing = activeTyreData.comments || '';
+                                            const newComment = existing ? `${existing} ${text}` : text;
+                                            handleManualTyreUpdate(activeTyreLoc, 'comments', newComment);
+                                        }}
+                                        className="!p-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-indigo-600"
+                                    />
+                                </div>
+
+                                {/* Quick-click Defect Chips */}
+                                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Quick Tags:</span>
+                                    {[
+                                        { label: '🔩 Nail in tyre', val: 'Nail in tread' },
+                                        { label: '✂️ Sidewall cut', val: 'Cut on sidewall' },
+                                        { label: '⚠️ Uneven wear', val: 'Uneven edge wear' },
+                                        { label: '📉 Low pressure', val: 'Low tyre pressure' },
+                                        { label: '✅ Good condition', val: 'Good condition, no damage' }
+                                    ].map(chip => (
+                                        <button
+                                            key={chip.val}
+                                            type="button"
+                                            onClick={() => {
+                                                const existing = activeTyreData.comments || '';
+                                                const newComment = existing ? `${existing}, ${chip.val}` : chip.val;
+                                                handleManualTyreUpdate(activeTyreLoc, 'comments', newComment);
+                                            }}
+                                            className="px-2 py-0.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200 rounded-full text-[11px] font-medium text-slate-600 transition cursor-pointer"
+                                        >
+                                            {chip.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
-                    )}
+                    </div>
+                )}
 
-                    {/* Ready for Next Voice Prompt Notice */}
-                    {currentStep.status !== 'na' && subStep === 'answer' && (
-                        <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3 text-xs text-emerald-800">
-                            <div className="flex items-center gap-2">
-                                <CheckCircle2 size={16} className="text-emerald-600 flex-shrink-0" />
-                                <span className="font-semibold">
-                                    Finding confirmed. Say <strong className="underline">&ldquo;Next&rdquo;</strong> aloud or click Continue when ready for the next step.
-                                </span>
+                {/* --- MODE 3: INSPECTION & TYRE SUMMARY VIEW --- */}
+                {mode === 'summary' && (
+                    <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-6">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <span className="text-[11px] font-black uppercase tracking-wider text-emerald-600 block">Complete Record</span>
+                                <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                                    Inspection & Tyre Summary Report
+                                </h2>
                             </div>
                             <button
                                 type="button"
-                                onClick={advanceToNextStep}
-                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex-shrink-0 flex items-center gap-1 cursor-pointer"
+                                onClick={handlePauseAndSave}
+                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                             >
-                                <span>Next</span>
-                                <ArrowRight size={12} />
+                                <CheckCheck size={14} />
+                                <span>Save & Close</span>
                             </button>
                         </div>
-                    )}
 
-                    {/* Running Inspection Log */}
-                    <div className="border border-slate-200 rounded-2xl bg-white p-4 space-y-3">
-                        <div className="flex items-center justify-between">
-                            <h4 className="font-bold text-xs uppercase text-slate-500 flex items-center gap-1.5">
-                                <ListFilter size={14} className="text-indigo-600" />
-                                Running Inspection Log ({steps.filter(s => s.status !== 'na' || s.comment).length} items recorded)
-                            </h4>
-                            <span className="text-[11px] text-slate-400">Live Auto-Save</span>
+                        {/* Tyre Summary Table */}
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                            <div className="p-3 bg-slate-100 border-b border-slate-200 font-black text-xs uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                    <Disc size={15} className="text-indigo-600" />
+                                    <span>Tyre Tread & Damage Log</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setMode('tyres')}
+                                    className="text-[11px] text-indigo-600 hover:text-indigo-900 font-bold underline cursor-pointer"
+                                >
+                                    Edit Tyres
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-xs text-left">
+                                    <thead className="bg-slate-50 text-slate-500 font-bold uppercase border-b border-slate-200">
+                                        <tr>
+                                            <th className="p-2.5">Tyre Location</th>
+                                            <th className="p-2.5 text-center">Outer</th>
+                                            <th className="p-2.5 text-center">Middle</th>
+                                            <th className="p-2.5 text-center">Inner</th>
+                                            <th className="p-2.5 text-center">Status</th>
+                                            <th className="p-2.5">Comments & Defects</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {(['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'] as TyreLocation[]).map(loc => {
+                                            const data = tyres[loc];
+                                            const meta = TYRE_META[loc];
+                                            const st = data?.indicator || 'na';
+                                            const cfg = statusConfig[st];
+                                            if (loc === 'spare' && data?.outer === undefined && !data?.comments) return null;
+                                            return (
+                                                <tr key={loc} className="hover:bg-slate-50/70">
+                                                    <td className="p-2.5 font-bold text-slate-900">{meta.name}</td>
+                                                    <td className="p-2.5 text-center font-mono font-bold">{data?.outer !== undefined ? `${data.outer} mm` : '-'}</td>
+                                                    <td className="p-2.5 text-center font-mono font-bold">{data?.middle !== undefined ? `${data.middle} mm` : '-'}</td>
+                                                    <td className="p-2.5 text-center font-mono font-bold">{data?.inner !== undefined ? `${data.inner} mm` : '-'}</td>
+                                                    <td className="p-2.5 text-center">
+                                                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase text-white ${cfg.bg}`}>
+                                                            {st.toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-2.5 text-slate-700 italic">{data?.comments || 'None'}</td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
-                        <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 divide-y divide-slate-100">
-                            {steps.map((st, i) => {
-                                return (
-                                    <div
-                                        key={st.itemId}
-                                        className={`pt-1.5 flex items-start justify-between gap-2 text-xs transition ${i === currentStepIndex ? 'bg-indigo-50/70 p-2 rounded-lg font-bold text-indigo-950' : 'text-slate-700'
-                                            }`}
-                                    >
-                                        <div className="flex items-start gap-2 flex-1">
-                                            <span className="font-mono text-slate-400 text-[11px] mt-0.5">#{i + 1}</span>
-                                            <div>
-                                                <span className="font-semibold text-slate-900">{st.itemLabel}</span>
-                                                {st.comment && <span className="text-slate-500 block text-[11px] italic">&ldquo;{st.comment}&rdquo;</span>}
-                                                {st.photoRequired && (
-                                                    <span className="inline-flex items-center gap-1 text-[10px] text-indigo-700 font-bold bg-indigo-50 border border-indigo-200 px-1.5 py-0.2 rounded mt-0.5">
-                                                        📷 Photo Required {st.photoNotes ? `(${st.photoNotes})` : ''}
-                                                    </span>
-                                                )}
-                                            </div>
+                        {/* Checklist Items Log */}
+                        <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-xs">
+                            <div className="p-3 bg-slate-100 border-b border-slate-200 font-black text-xs uppercase tracking-wider text-slate-700 flex items-center justify-between">
+                                <span className="flex items-center gap-1.5">
+                                    <ListFilter size={15} className="text-indigo-600" />
+                                    <span>Checklist Questions ({recordedChecklistCount}/{totalSteps})</span>
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setMode('checklist')}
+                                    className="text-[11px] text-indigo-600 hover:text-indigo-900 font-bold underline cursor-pointer"
+                                >
+                                    Edit Checklist
+                                </button>
+                            </div>
+                            <div className="divide-y divide-slate-100 max-h-64 overflow-y-auto">
+                                {steps.map((st, i) => (
+                                    <div key={st.itemId} className="p-2.5 flex items-center justify-between text-xs hover:bg-slate-50/70">
+                                        <div>
+                                            <span className="font-bold text-slate-900">#{i + 1} {st.itemLabel}</span>
+                                            {st.comment && <span className="text-slate-500 block text-[11px] italic">&ldquo;{st.comment}&rdquo;</span>}
                                         </div>
-                                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                                            <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${st.status === 'ok' ? 'bg-emerald-100 text-emerald-800' :
-                                                    st.status === 'attention' ? 'bg-amber-100 text-amber-800' :
-                                                        st.status === 'urgent' ? 'bg-red-100 text-red-800' :
-                                                            'bg-slate-100 text-slate-500'
-                                                }`}>
-                                                {st.status.toUpperCase()}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => handleJumpToStep(i + 1)}
-                                                className="text-[10px] text-indigo-600 hover:text-indigo-900 font-bold underline cursor-pointer"
-                                            >
-                                                Edit
-                                            </button>
-                                        </div>
+                                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase text-white ${statusConfig[st.status].bg}`}>
+                                            {st.status.toUpperCase()}
+                                        </span>
                                     </div>
-                                );
-                            })}
+                                ))}
+                            </div>
                         </div>
                     </div>
-                </div>
+                )}
 
-                {/* Footer Navigation Choice */}
-                <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
-                    {/* Jump to Step Input */}
-                    <div className="flex items-center gap-2 w-full sm:w-auto">
-                        <span className="text-xs text-slate-500 font-medium">Jump to step #:</span>
-                        <input
-                            type="number"
-                            min={1}
-                            max={totalSteps}
-                            value={jumpStepInput}
-                            onChange={e => setJumpStepInput(e.target.value)}
-                            placeholder="e.g. 1"
-                            className="w-16 px-2 py-1.5 bg-white border border-slate-300 rounded-lg text-xs font-bold text-center outline-none focus:ring-1 focus:ring-indigo-500"
-                            onKeyDown={e => {
-                                if (e.key === 'Enter' && jumpStepInput) {
-                                    handleJumpToStep(parseInt(jumpStepInput, 10));
-                                }
-                            }}
-                        />
-                        <button
-                            type="button"
-                            onClick={() => jumpStepInput && handleJumpToStep(parseInt(jumpStepInput, 10))}
-                            className="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition cursor-pointer"
-                        >
-                            Jump
-                        </button>
-                    </div>
-
-                    {/* Step Options: Continue / Back / Pause */}
-                    <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {/* Footer Controls */}
+                <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
                         <button
                             type="button"
                             onClick={handlePauseAndSave}
                             className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                         >
                             <Pause size={13} />
-                            <span>Pause & Save Log</span>
+                            <span>Pause & Save</span>
                         </button>
+                    </div>
 
-                        {currentStepIndex > 0 && (
-                            <button
-                                type="button"
-                                onClick={handlePreviousStep}
-                                className="px-3.5 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
-                            >
-                                <ArrowLeft size={13} />
-                                <span>Previous Step</span>
-                            </button>
+                    <div className="flex items-center gap-2">
+                        {mode === 'checklist' && (
+                            <>
+                                {currentStepIndex > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={handlePreviousStep}
+                                        className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <ArrowLeft size={13} />
+                                        <span>Previous</span>
+                                    </button>
+                                )}
+                                {!isLastChecklistStep ? (
+                                    <button
+                                        type="button"
+                                        onClick={advanceToNextStep}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <span>Continue (or say &ldquo;Next&rdquo;)</span>
+                                        <ArrowRight size={13} />
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setMode('tyres');
+                                            setCurrentTyreIndex(0);
+                                            setTyreSubStep('depths');
+                                            readCurrentTyre(0, 'depths');
+                                        }}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <span>Proceed to Tyre Check</span>
+                                        <ArrowRight size={13} />
+                                    </button>
+                                )}
+                            </>
                         )}
 
-                        {!isLastStep ? (
-                            <button
-                                type="button"
-                                onClick={advanceToNextStep}
-                                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                            >
-                                <span>Continue (or say &ldquo;Next&rdquo;)</span>
-                                <ArrowRight size={13} />
-                            </button>
-                        ) : (
+                        {mode === 'tyres' && (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={handlePreviousTyre}
+                                    className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <ArrowLeft size={13} />
+                                    <span>Previous Tyre</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleNextTyre}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                >
+                                    <span>{currentTyreIndex < 3 ? 'Next Tyre (or say "Next")' : 'Finish Tyres'}</span>
+                                    <ArrowRight size={13} />
+                                </button>
+                            </>
+                        )}
+
+                        {mode === 'summary' && (
                             <button
                                 type="button"
                                 onClick={handlePauseAndSave}
-                                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                             >
-                                <CheckCircle2 size={13} />
-                                <span>Complete Inspection</span>
+                                <CheckCircle2 size={15} />
+                                <span>Finish & Close</span>
                             </button>
                         )}
                     </div>
                 </div>
+
             </div>
         </div>
     );

@@ -108,6 +108,8 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                     onChecklistUpdate={onChecklistUpdate}
                     vehicleRegistration={vehicleRegistration}
                     vehicleModel={vehicleModel}
+                    tyreData={tyreData}
+                    onTyreUpdate={onTyreUpdate}
                 />
             )}
 
@@ -119,6 +121,8 @@ export const JobInspectionTab: React.FC<JobInspectionTabProps> = ({
                     vehicleRegistration={vehicleRegistration}
                     vehicleModel={vehicleModel}
                     hideGuidedHostButton={true}
+                    tyreData={tyreData}
+                    onTyreUpdate={onTyreUpdate}
                 />
             ) : (
                 <div className="text-center py-10 bg-slate-100 border-2 border-dashed border-slate-300 rounded-xl text-slate-700">

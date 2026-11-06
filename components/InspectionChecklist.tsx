@@ -1,7 +1,7 @@
 import { cloudSpeechSynthesis, CloudSpeechSynthesisUtterance } from '../core/utils/cloudSpeech';
 
 import React, { useState } from 'react';
-import { ChecklistSection, ChecklistItem, ChecklistItemStatus } from '../types';
+import { ChecklistSection, ChecklistItem, ChecklistItemStatus, TyreCheckData } from '../types';
 import { Check, AlertTriangle, XCircle, HelpCircle, Volume2, Sparkles, Play } from 'lucide-react';
 import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
@@ -15,6 +15,8 @@ interface InspectionChecklistProps {
     vehicleRegistration?: string;
     vehicleModel?: string;
     hideGuidedHostButton?: boolean;
+    tyreData?: TyreCheckData;
+    onTyreUpdate?: (updatedTyreData: TyreCheckData) => void;
 }
 
 const statusConfig: Record<ChecklistItemStatus, { icon: React.ElementType, color: string, hexColor: string, label: string }> = {
@@ -30,7 +32,9 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({
     isReadOnly,
     vehicleRegistration,
     vehicleModel,
-    hideGuidedHostButton = false
+    hideGuidedHostButton = false,
+    tyreData,
+    onTyreUpdate
 }) => {
     const appContext = React.useContext(AppContext);
     const preferredVoiceName = appContext?.preferredVoiceName || null;
@@ -107,6 +111,8 @@ const InspectionChecklist: React.FC<InspectionChecklistProps> = ({
                     onChecklistUpdate={onUpdate}
                     vehicleRegistration={vehicleRegistration}
                     vehicleModel={vehicleModel}
+                    tyreData={tyreData}
+                    onTyreUpdate={onTyreUpdate}
                 />
             )}
 
