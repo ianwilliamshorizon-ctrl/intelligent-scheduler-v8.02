@@ -748,7 +748,7 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                 </div>
             )}
 
-            {printOptions.showInspections && hasDamageReport && (
+            {printOptions.showInspections && (hasDamageReport || Boolean(vehicle)) && (
                 <div className="bg-white font-sans text-sm text-gray-800 printable-additional-page" style={{ ...containerStyle, padding: '12mm 14mm', breakBefore: 'page', pageBreakBefore: 'always' }}>
                     <header className="flex justify-between items-center mb-6 border-b pb-2">
                         <h2 className="text-2xl font-bold text-gray-800">Vehicle Condition Report</h2>

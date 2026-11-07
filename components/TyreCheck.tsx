@@ -55,8 +55,13 @@ const TyreCheck: React.FC<TyreCheckProps> = ({ tyreData, onUpdate, isReadOnly })
                     const data = tyreData[location];
                     if (!data) return null; 
 
-                    const hasTreadData = data.outer || data.middle || data.inner;
-                    if (isReadOnly && data.indicator === 'na' && !hasTreadData && !data.pressure && !data.comments) return null;
+                    const hasTreadData = data.outer !== undefined || data.middle !== undefined || data.inner !== undefined;
+                    // For spare tyre in read-only print mode: ensure it is always documented rather than hidden
+                    if (isReadOnly && location === 'spare' && data.indicator === 'na' && !hasTreadData && !data.pressure && !data.comments) {
+                        data.comments = 'No spare tyre fitted / N/A';
+                    } else if (isReadOnly && data.indicator === 'na' && !hasTreadData && !data.pressure && !data.comments) {
+                        return null;
+                    }
 
                     return (
                         <div key={location} className="p-3 flex flex-wrap items-center gap-x-4 gap-y-2 hover:bg-slate-50/60 transition">

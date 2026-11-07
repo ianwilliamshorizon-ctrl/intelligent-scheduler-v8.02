@@ -34,7 +34,7 @@ interface GuidedInspectionModalProps {
 
 type InspectionMode = 'checklist' | 'tyres' | 'summary';
 type InspectionSubStep = 'answer' | 'findingNotes' | 'photoPrompt' | 'photoNotes';
-type TyreSubStep = 'depths' | 'comments';
+type TyreSubStep = 'depths' | 'comments' | 'sparePrompt';
 
 export const TYRE_KEYS: TyreLocation[] = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight', 'spare'];
 
@@ -718,13 +718,45 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             const nextLoc = TYRE_KEYS[nextIdx];
             const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
             speakText(`${commentConfirm}Moving to ${TYRE_META[nextLoc].spokenName || TYRE_META[nextLoc].position}. Say outer, middle, and inner tread depths.`);
+        } else if (currentTyreIndexRef.current === 3) {
+            // Road tyre 4 finished! Ask if vehicle has a spare tyre:
+            setTyreSubStep('sparePrompt');
+            tyreSubStepRef.current = 'sparePrompt';
+            tyreSubStepStartTimeRef.current = Date.now();
+            const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
+            speakText(`${commentConfirm}All 4 road tyres recorded. Does the vehicle have a spare tyre? Say Yes or No.`);
         } else {
+            // Finished spare tyre (index 4)!
             setMode('summary');
             modeRef.current = 'summary';
             const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
-            speakText(`${commentConfirm}Tyre check report complete! All 4 road tyres and inspection checklist points have been recorded and saved.`);
+            speakText(`${commentConfirm}Tyre check report complete! All tyres including spare tyre have been recorded and saved.`);
         }
-    }, [saveTyreData, speakText]);
+    }, [saveTyreData, speakText, goToTyre]);
+
+    const handleSpareChoice = useCallback((hasSpare: boolean) => {
+        if (hasSpare) {
+            goToTyre(4, 'depths');
+            speakText("Spare Tyre. Please say outer, middle, and inner tread depths.");
+        } else {
+            const currentSpare = tyresRef.current.spare || { indicator: 'na' };
+            const updated = {
+                ...tyresRef.current,
+                spare: {
+                    ...currentSpare,
+                    indicator: 'na' as ChecklistItemStatus,
+                    outer: undefined,
+                    middle: undefined,
+                    inner: undefined,
+                    comments: 'No spare tyre fitted'
+                }
+            };
+            saveTyreData(updated);
+            setMode('summary');
+            modeRef.current = 'summary';
+            speakText("No spare tyre. Tyre check report complete! All inspection points recorded and saved.");
+        }
+    }, [goToTyre, saveTyreData, speakText]);
 
     const handleRetakeTyreDepths = useCallback(() => {
         const loc = TYRE_KEYS[currentTyreIndexRef.current];
@@ -1022,6 +1054,27 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 handleTyreCommentSubmit(rawTranscript);
                                 return;
                             }
+                        } else if (activeSub === 'sparePrompt') {
+                            if (now - tyreSubStepStartTimeRef.current < 1000) {
+                                continue;
+                            }
+
+                            const isYes = /\b(yes|yeah|yep|has spare|has a spare|spare tyre|true|affirmative)\b/i.test(cleaned);
+                            const isNo = /\b(no|nope|nah|none|no spare|no spare tyre|not fitted|n a|na|negative)\b/i.test(cleaned);
+
+                            if (isYes) {
+                                lastCommandTimestampRef.current = now;
+                                setLastHeardCommand('Heard: "Yes" → Spare Tyre');
+                                handleSpareChoice(true);
+                                return;
+                            }
+                            if (isNo) {
+                                lastCommandTimestampRef.current = now;
+                                setLastHeardCommand('Heard: "No" → No Spare Tyre');
+                                handleSpareChoice(false);
+                                return;
+                            }
+                            continue;
                         }
                         continue;
                     }
@@ -1732,7 +1785,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 {(['frontLeft', 'frontRight', 'rearLeft', 'rearRight'] as TyreLocation[]).map((locKey, idx) => {
                                     const meta = TYRE_META[locKey];
                                     const data = tyres[locKey];
-                                    const isSelected = activeTyreLoc === locKey;
+                                    const isSelected = activeTyreLoc === locKey && tyreSubStep !== 'sparePrompt';
                                     const st = data?.indicator || 'na';
                                     const cfg = statusConfig[st];
                                     return (
@@ -1755,9 +1808,69 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     );
                                 })}
                             </div>
+                            <div className="mt-2.5 max-w-md mx-auto">
+                                {(() => {
+                                    const meta = TYRE_META.spare;
+                                    const data = tyres.spare;
+                                    const isSelected = activeTyreLoc === 'spare' && tyreSubStep !== 'sparePrompt';
+                                    const st = data?.indicator || 'na';
+                                    const cfg = statusConfig[st];
+                                    return (
+                                        <button
+                                            type="button"
+                                            onClick={() => handleJumpToTyre(4)}
+                                            className={`w-full py-2 px-3 rounded-xl border-2 transition-all flex items-center justify-between gap-2 cursor-pointer ${isSelected
+                                                ? 'bg-indigo-50 border-indigo-600 shadow-md scale-[1.01]'
+                                                : 'bg-white border-slate-200 hover:border-slate-300'}`}
+                                        >
+                                            <div className="text-left">
+                                                <span className="font-black text-xs block text-slate-900">SP - Spare Tyre (Boot / Underslung)</span>
+                                                <span className="text-[11px] font-mono text-slate-500">
+                                                    {data?.outer !== undefined ? `O:${data.outer} M:${data.middle} I:${data.inner} mm` : (data?.comments || 'Not recorded')}
+                                                </span>
+                                            </div>
+                                            <span className={`w-3 h-3 rounded-full ${cfg.bg} shrink-0 ring-2 ring-white`} title={cfg.label} />
+                                        </button>
+                                    );
+                                })()}
+                            </div>
                         </div>
 
-                        {/* Active Tyre Input Card */}
+                        {/* Spare Tyre Prompt or Active Tyre Input Card */}
+                        {tyreSubStep === 'sparePrompt' ? (
+                            <div className="p-6 bg-gradient-to-br from-indigo-50 via-white to-slate-50 rounded-2xl border-2 border-indigo-200 text-center space-y-4 max-w-lg mx-auto shadow-md">
+                                <div className="w-14 h-14 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
+                                    <Disc size={28} />
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-black text-slate-900">Spare Tyre Check</h3>
+                                    <p className="text-sm text-slate-600 mt-1">
+                                        Does this vehicle have a spare tyre fitted (boot or underslung)?
+                                    </p>
+                                </div>
+                                <div className="flex items-center justify-center gap-3 pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSpareChoice(false)}
+                                        className="flex-1 py-3 px-5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 cursor-pointer border border-slate-200 shadow-xs"
+                                    >
+                                        <XCircle size={18} className="text-slate-500" />
+                                        <span>No (Close & Save)</span>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSpareChoice(true)}
+                                        className="flex-1 py-3 px-5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 cursor-pointer shadow-md"
+                                    >
+                                        <CheckCircle2 size={18} />
+                                        <span>Yes (Record Depths)</span>
+                                    </button>
+                                </div>
+                                <span className="text-xs text-slate-400 block">
+                                    Voice recognition active: say &ldquo;Yes&rdquo; or &ldquo;No&rdquo;
+                                </span>
+                            </div>
+                        ) : (
                         <div className="p-4 sm:p-5 bg-gradient-to-br from-indigo-50/50 via-white to-slate-50 rounded-2xl border border-indigo-100 shadow-xs space-y-4">
                             
                             {/* Tread Depth Inputs (Outer, Middle, Inner) */}
@@ -1950,6 +2063,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 </div>
                             </div>
                         </div>
+                        )}
                     </div>
                 )}
 
@@ -2120,26 +2234,46 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     className="px-3 py-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer"
                                 >
                                     <ArrowLeft size={13} />
-                                    <span>Previous Tyre</span>
+                                    <span>Previous</span>
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (tyreSubStep === 'comments') {
-                                            handleTyreCommentSubmit(activeTyreData.comments || '');
-                                        } else {
-                                            handleNextTyre();
-                                        }
-                                    }}
-                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                >
-                                    <span>
-                                        {tyreSubStep === 'comments'
-                                            ? currentTyreIndex < 3 ? 'Save & Next Tyre' : 'Save & Finish Tyres'
-                                            : currentTyreIndex < 3 ? 'Next Tyre (or say "Next")' : 'Finish Tyres'}
-                                    </span>
-                                    <ArrowRight size={13} />
-                                </button>
+                                {tyreSubStep === 'sparePrompt' ? (
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSpareChoice(false)}
+                                            className="px-3.5 py-2 bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl text-xs font-bold transition cursor-pointer"
+                                        >
+                                            No Spare (Save & Close)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSpareChoice(true)}
+                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                        >
+                                            <span>Yes, Record Spare</span>
+                                            <ArrowRight size={13} />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            if (tyreSubStep === 'comments') {
+                                                handleTyreCommentSubmit(activeTyreData.comments || '');
+                                            } else {
+                                                handleNextTyre();
+                                            }
+                                        }}
+                                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                    >
+                                        <span>
+                                            {tyreSubStep === 'comments'
+                                                ? currentTyreIndex < 3 ? 'Save & Next Tyre' : currentTyreIndex === 3 ? 'Save & Check Spare' : 'Save & Finish Tyres'
+                                                : currentTyreIndex < 3 ? 'Next Tyre (or say "Next")' : currentTyreIndex === 3 ? 'Check Spare Tyre' : 'Finish Tyres'}
+                                        </span>
+                                        <ArrowRight size={13} />
+                                    </button>
+                                )}
                             </>
                         )}
 

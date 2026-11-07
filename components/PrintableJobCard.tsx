@@ -14,6 +14,8 @@ import {
     DocumentBlockConfig
 } from '../types';
 import InspectionChecklist from './InspectionChecklist';
+import VehicleDamageReport from './VehicleDamageReport';
+import TyreCheck from './TyreCheck';
 import AsyncMedia from './AsyncMedia';
 import { getFile } from '../utils/imageStore';
 import { 
@@ -102,6 +104,34 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
         const hourTotal = tasksList.reduce((sum, li) => sum + Number(li.quantity || 0), 0);
         return hourTotal > 0 ? hourTotal : (job.estimatedHours || 0);
     }, [tasksList, job.estimatedHours]);
+
+    const vehicleImage = useMemo(() => {
+        if (vehicle && Array.isArray(vehicle.images)) {
+            return vehicle.images.find(img => img.isPrimaryDiagram) || vehicle.images[0];
+        }
+        return null;
+    }, [vehicle]);
+
+    const matchedLibraryDiagram = useMemo(() => {
+        if (!vehicle || !inspectionDiagrams || vehicleImage) return null;
+        return inspectionDiagrams.find(d => 
+            String(d.make || '').toLowerCase() === String(vehicle.make || '').toLowerCase() && 
+            String(d.model || '').toLowerCase() === String(vehicle.model || '').toLowerCase()
+        ) || inspectionDiagrams.find(d => 
+            String(d.make || '').toLowerCase() === String(vehicle.make || '').toLowerCase()
+        ) || null;
+    }, [vehicle, inspectionDiagrams, vehicleImage]);
+
+    const hasTyreData = useMemo(() => {
+        if (!job?.tyreCheck) return false;
+        return Object.values(job.tyreCheck).some(t => 
+            t?.outer !== undefined || t?.middle !== undefined || t?.inner !== undefined || t?.pressure || (t?.comments && t.comments.trim() !== '') || (t?.indicator && t.indicator !== 'na')
+        );
+    }, [job?.tyreCheck]);
+
+    const hasDamageReport = useMemo(() => {
+        return Boolean(job?.damagePoints && job.damagePoints.length > 0);
+    }, [job?.damagePoints]);
 
     // Active Layout Configuration
     const layoutConfig = entity?.jobCardLayout;
@@ -616,7 +646,7 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
             )}
 
             {hasFilledChecklist && (
-                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={pageStyle}>
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ ...pageStyle, breakBefore: 'page', pageBreakBefore: 'always' }}>
                     <header className="flex justify-between items-center mb-6 border-b pb-2">
                         <h2 className="text-2xl font-bold text-gray-800">{inspectionTemplate?.name || 'Inspection Report'}</h2>
                         <div className="text-right text-sm">
@@ -630,6 +660,42 @@ const PrintableJobCard: React.FC<PrintableJobCardProps> = ({
                             onUpdate={() => { }}
                             isReadOnly={true}
                         />
+                    </main>
+                </div>
+            )}
+
+            {/* Vehicle Diagram Picture & Tyre Safety Report Page */}
+            {(hasTyreData || hasDamageReport || hasFilledChecklist || Boolean(vehicle)) && (
+                <div className="bg-white font-sans text-sm text-gray-800 printable-page" style={{ ...pageStyle, breakBefore: 'page', pageBreakBefore: 'always' }}>
+                    <header className="flex justify-between items-center mb-4 border-b pb-2">
+                        <h2 className="text-2xl font-bold text-gray-800">Vehicle Condition & Tyre Report</h2>
+                        <div className="text-right text-sm">
+                            <p><strong>Vehicle:</strong> {vehicle?.registration} {vehicle?.make ? `(${vehicle.make} ${vehicle.model || ''})` : ''}</p>
+                            <p><strong>Job:</strong> {job?.id}</p>
+                        </div>
+                    </header>
+                    <main className="space-y-6">
+                        {/* Vehicle Diagram Picture */}
+                        <div>
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 mb-2">Vehicle Diagram & Condition</h3>
+                            <VehicleDamageReport 
+                                activePoints={job.damagePoints || []} 
+                                onUpdate={() => { }} 
+                                isReadOnly={true} 
+                                vehicleModel={`${vehicle?.make || ''} ${vehicle?.model || ''}`.trim() || undefined} 
+                                vehicleColor={vehicle?.colour} 
+                                imageId={vehicle?.inspectionDiagramId || vehicleImage?.id || matchedLibraryDiagram?.imageId || null} 
+                                imageUrl={vehicleImage?.dataUrl || null} 
+                            />
+                        </div>
+
+                        {/* Tyre Check Report */}
+                        {job.tyreCheck && (
+                            <div>
+                                <h3 className="text-sm font-bold uppercase tracking-wider text-gray-700 mb-2">Tyre Safety Report</h3>
+                                <TyreCheck tyreData={job.tyreCheck} onUpdate={() => { }} isReadOnly={true} />
+                            </div>
+                        )}
                     </main>
                 </div>
             )}
