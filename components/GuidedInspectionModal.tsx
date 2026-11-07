@@ -293,6 +293,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
     const safetyTimerRef = useRef<any>(null);
     const lastSpeechEndTimeRef = useRef<number>(0);
     const depthsBufferRef = useRef<number[]>([]);
+    const tyreSubStepStartTimeRef = useRef<number>(Date.now());
     const [depthsBufferDisplay, setDepthsBufferDisplay] = useState<number[]>([]);
 
     // Keep refs in sync with current state
@@ -427,7 +428,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         if (sub === 'depths') {
             speakText(`${info.spokenName || info.position}. Please say outer, middle, and inner tread depths. For example, 6, 6, 5.`);
         } else {
-            speakText(`${info.spokenName || info.position}: Say comments such as nail in tyre or damage, or say None when ready.`);
+            speakText(`${info.spokenName || info.position}: Say comments such as nail in tyre or damage, or say Continue when ready.`);
         }
     }, [speakText]);
 
@@ -663,6 +664,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         currentTyreIndexRef.current = idx;
         setTyreSubStep(sub);
         tyreSubStepRef.current = sub;
+        tyreSubStepStartTimeRef.current = Date.now();
         depthsBufferRef.current = [];
         setDepthsBufferDisplay([]);
         setLiveTranscript('');
@@ -686,11 +688,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         saveTyreData(updated);
         setTyreSubStep('comments');
         tyreSubStepRef.current = 'comments';
+        tyreSubStepStartTimeRef.current = Date.now();
         depthsBufferRef.current = [];
         setDepthsBufferDisplay([]);
         const statusPhrase = autoStatus === 'ok' ? 'Pass' : autoStatus === 'attention' ? 'Attention required' : 'Urgent replacement';
         setLastHeardCommand(`Depths: O:${outer} M:${middle} I:${inner} mm (${statusPhrase})`);
-        speakText(`${TYRE_META[loc].spokenName || TYRE_META[loc].position}: Outer ${outer}, middle ${middle}, inner ${inner} recorded. Status ${statusPhrase}. Any tyre comments like a nail or damage, or say None?`);
+        speakText(`${TYRE_META[loc].spokenName || TYRE_META[loc].position}: Outer ${outer}, middle ${middle}, inner ${inner} recorded. Status ${statusPhrase}. Any comments for this tyre, or say Continue?`);
     }, [saveTyreData, speakText]);
 
     const handleTyreCommentSubmit = useCallback((comment: string) => {
@@ -718,7 +721,8 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         } else {
             setMode('summary');
             modeRef.current = 'summary';
-            speakText("Tyre check report complete! All 4 road tyres and inspection checklist points have been recorded and saved.");
+            const commentConfirm = cleanComment ? `Comment recorded: ${cleanComment}. ` : '';
+            speakText(`${commentConfirm}Tyre check report complete! All 4 road tyres and inspection checklist points have been recorded and saved.`);
         }
     }, [saveTyreData, speakText]);
 
@@ -756,8 +760,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         };
         saveTyreData(updated);
         setTyreSubStep('comments');
+        tyreSubStepRef.current = 'comments';
+        tyreSubStepStartTimeRef.current = Date.now();
         setLastHeardCommand("Comment cleared for retake");
-        speakText(`Comment cleared for ${TYRE_META[loc].spokenName || TYRE_META[loc].position}. Dictate comments, or say None.`);
+        speakText(`Comment cleared for ${TYRE_META[loc].spokenName || TYRE_META[loc].position}. Dictate comments, or say Continue.`);
     }, [saveTyreData, speakText]);
 
     const handleNextTyre = useCallback(() => {
@@ -877,7 +883,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const now = Date.now();
 
                     // CRITICAL: Suppress command matching while the host is speaking or during the 400ms room echo settling window.
-                    if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 400)) {
+                    if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 600)) {
                         continue;
                     }
 
@@ -983,20 +989,35 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 return;
                             }
                         } else if (activeSub === 'comments') {
+                            // Don't accept comment input until at least 1000ms after entering comments mode
+                            if (now - tyreSubStepStartTimeRef.current < 1000) {
+                                continue;
+                            }
+
                             if (isBack) {
                                 lastCommandTimestampRef.current = now;
                                 setTyreSubStep('depths');
+                                tyreSubStepRef.current = 'depths';
                                 speakText(`Retaking tread depths for ${TYRE_META[activeLoc].spokenName || TYRE_META[activeLoc].position}. Say outer, middle, and inner depths.`);
                                 return;
                             }
-                            // If user says "none", "no", "all good", "pass", "ok", "next":
-                            if (/\b(none|no|nope|no comment|no comments|all good|pass|good|clear|fine|done|skip|next)\b/i.test(cleaned)) {
+
+                            // Filter out acoustic echo of host prompt and previous depth numbers
+                            const isHostEcho = /\b(outer|middle|inner|recorded|status pass|status attention|status urgent|any comments|say continue)\b/i.test(cleaned);
+                            const isOnlyNumbers = /^[\d\s.,pointdot]+$/.test(cleaned);
+                            if (isHostEcho || isOnlyNumbers) {
+                                continue;
+                            }
+
+                            // User explicitly says "none", "no", "no comment", "continue", "next", "all good", "pass", "skip":
+                            if (/\b(none|no|nope|no comment|no comments|all good|pass|good|clear|fine|done|skip|next|continue|proceed)\b/i.test(cleaned)) {
                                 lastCommandTimestampRef.current = now;
                                 handleTyreCommentSubmit('');
                                 return;
                             }
-                            // If user dictates a comment
-                            if (result.isFinal || cleaned.length > 5) {
+
+                            // If user dictates a comment, ONLY submit on finalized speech (NEVER on interim!)
+                            if (result.isFinal && cleaned.length >= 2) {
                                 lastCommandTimestampRef.current = now;
                                 handleTyreCommentSubmit(rawTranscript);
                                 return;
@@ -1856,13 +1877,22 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                     <label className="text-xs font-bold uppercase tracking-wider text-slate-500 flex items-center gap-1.5">
                                         <span>Tyre Comments & Defects</span>
                                     </label>
-                                    <button
-                                        type="button"
-                                        onClick={handleRetakeTyreComment}
-                                        className="text-[11px] font-bold text-slate-600 hover:text-slate-900 underline cursor-pointer"
-                                    >
-                                        Clear Comment
-                                    </button>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleTyreCommentSubmit('')}
+                                            className="text-[11px] font-bold text-slate-600 hover:text-slate-900 px-2 py-0.5 bg-slate-100 hover:bg-slate-200 rounded cursor-pointer transition"
+                                        >
+                                            No Comment (Continue)
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleRetakeTyreComment}
+                                            className="text-[11px] font-bold text-slate-500 hover:text-slate-700 underline cursor-pointer"
+                                        >
+                                            Clear
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center gap-2">
@@ -1884,6 +1914,14 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                         }}
                                         className="!p-2.5 bg-white border border-slate-300 hover:bg-slate-50 text-indigo-600"
                                     />
+                                    <button
+                                        type="button"
+                                        onClick={() => handleTyreCommentSubmit(activeTyreData.comments || '')}
+                                        className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer shadow-xs shrink-0"
+                                    >
+                                        <span>Save</span>
+                                        <ArrowRight size={13} />
+                                    </button>
                                 </div>
 
                                 {/* Quick-click Defect Chips */}
@@ -2086,10 +2124,20 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={handleNextTyre}
+                                    onClick={() => {
+                                        if (tyreSubStep === 'comments') {
+                                            handleTyreCommentSubmit(activeTyreData.comments || '');
+                                        } else {
+                                            handleNextTyre();
+                                        }
+                                    }}
                                     className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                                 >
-                                    <span>{currentTyreIndex < 3 ? 'Next Tyre (or say "Next")' : 'Finish Tyres'}</span>
+                                    <span>
+                                        {tyreSubStep === 'comments'
+                                            ? currentTyreIndex < 3 ? 'Save & Next Tyre' : 'Save & Finish Tyres'
+                                            : currentTyreIndex < 3 ? 'Next Tyre (or say "Next")' : 'Finish Tyres'}
+                                    </span>
                                     <ArrowRight size={13} />
                                 </button>
                             </>
