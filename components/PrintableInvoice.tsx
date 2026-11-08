@@ -266,53 +266,53 @@ const PrintableInvoice: React.FC<PrintableInvoiceProps> = ({
                 {/* Block 2: Document Meta Details */}
                 {block.type === 'document_meta' && (
                     <div 
-                        className={`${cs.wrapperClass} flex flex-wrap items-center justify-between gap-3`}
-                        style={cs.wrapperStyle}
+                        className={`${cs.wrapperClass} px-5 py-3 sm:py-3.5 flex flex-wrap items-center justify-between gap-4`}
+                        style={{
+                            ...cs.wrapperStyle,
+                            backgroundColor: cs.wrapperStyle.backgroundColor === '#ffffff' && block.settings?.style === 'banner'
+                                ? '#f8fafc'
+                                : cs.wrapperStyle.backgroundColor
+                        }}
                     >
-                        <div className="flex items-center gap-3">
-                            <div>
-                                <span 
-                                    className="text-[10px] font-black uppercase tracking-wider block"
-                                    style={cs.titleStyle}
-                                >
-                                    {block.title || 'INVOICE NUMBER'}
-                                </span>
-                                <span 
-                                    className="text-lg font-black tracking-tight font-mono"
-                                    style={cs.textStyle}
-                                >
-                                    {(invoice as any).invoiceNumber || invoice.id}
-                                </span>
-                            </div>
-                            {vehicle?.registration && (
-                                <span className="inline-block bg-yellow-400 text-black font-mono font-black text-xs px-2 py-0.5 rounded border border-yellow-500 shadow-2xs tracking-wider uppercase ml-1">
-                                    {vehicle.registration}
-                                </span>
-                            )}
+                        <div>
+                            <span 
+                                className="text-[10px] font-black uppercase tracking-wider block"
+                                style={cs.titleStyle.color === '#ffffff' && (!cs.wrapperStyle.backgroundColor || cs.wrapperStyle.backgroundColor === '#ffffff' || cs.wrapperStyle.backgroundColor === '#f8fafc') ? { color: accentColor } : cs.titleStyle}
+                            >
+                                {block.title || 'INVOICE NUMBER'}
+                            </span>
+                            <span 
+                                className="text-xl font-black tracking-tight font-mono block mt-0.5"
+                                style={cs.textStyle}
+                            >
+                                {(invoice as any).invoiceNumber || invoice.id}
+                            </span>
                         </div>
-                        <div className="flex items-center gap-6 text-xs" style={cs.textStyle}>
+                        <div className="flex flex-wrap items-center gap-6 sm:gap-8 text-xs" style={cs.textStyle}>
                             <div>
-                                <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Invoice Date</span>
-                                <span className="font-bold" style={cs.textStyle}>
-                                    {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                <span className="text-[10px] block uppercase font-semibold tracking-wider" style={cs.subtextStyle}>Created Date</span>
+                                <span className="font-bold text-sm block mt-0.5" style={cs.textStyle}>
+                                    {((invoice as any).createdDate || (invoice as any).createdAt || invoice.issueDate)
+                                        ? new Date((invoice as any).createdDate || (invoice as any).createdAt || invoice.issueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                                        : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                 </span>
                             </div>
                             {invoice.dueDate && (
                                 <div>
-                                    <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Due Date</span>
-                                    <span className="font-bold" style={cs.textStyle}>
+                                    <span className="text-[10px] block uppercase font-semibold tracking-wider" style={cs.subtextStyle}>Due Date</span>
+                                    <span className="font-bold text-sm block mt-0.5" style={cs.textStyle}>
                                         {new Date(invoice.dueDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
                                     </span>
                                 </div>
                             )}
                             <div>
-                                <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>Account Ref</span>
-                                <span className="font-bold font-mono" style={cs.textStyle}>{customer?.id ? `ACC-${customer.id.slice(-6).toUpperCase()}` : 'CASH'}</span>
+                                <span className="text-[10px] block uppercase font-semibold tracking-wider" style={cs.subtextStyle}>Account Ref</span>
+                                <span className="font-bold font-mono text-sm block mt-0.5" style={cs.textStyle}>{customer?.id ? `ACC-${customer.id.slice(-6).toUpperCase()}` : 'CASH'}</span>
                             </div>
                             {(invoice as any).poNumber && (
                                 <div>
-                                    <span className="text-[10px] block uppercase font-semibold" style={cs.subtextStyle}>PO Ref</span>
-                                    <span className="font-bold font-mono" style={cs.textStyle}>{(invoice as any).poNumber}</span>
+                                    <span className="text-[10px] block uppercase font-semibold tracking-wider" style={cs.subtextStyle}>PO Ref</span>
+                                    <span className="font-bold font-mono text-sm block mt-0.5" style={cs.textStyle}>{(invoice as any).poNumber}</span>
                                 </div>
                             )}
                         </div>

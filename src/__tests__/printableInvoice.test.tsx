@@ -147,7 +147,7 @@ describe('PrintableInvoice - Multi-Page Print Layout', () => {
         const thead = document.querySelector('thead.print-header-group');
         expect(thead).toHaveTextContent('Brookspeed Automotive Ltd');
         expect(thead).toHaveTextContent('INV-1001');
-        expect(thead).toHaveTextContent('HL24 RCK');
+        expect(thead).toHaveTextContent('Created Date');
     });
 
     it('renders running page footer with page counter and legal entity info in tfoot', () => {
