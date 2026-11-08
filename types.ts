@@ -666,6 +666,11 @@ export interface DocumentBlockConfig {
         showCompanyNumber?: boolean;
         pageBreakBefore?: boolean;
         fontSize?: 'small' | 'medium' | 'large';
+        showCustomerName?: boolean;
+        showCompanyName?: boolean;
+        showCustomerAddress?: boolean;
+        showCustomerPhone?: boolean;
+        showCustomerEmail?: boolean;
     };
 }
 
@@ -695,6 +700,11 @@ export interface DocumentLayoutSettings {
     showVatBreakdown?: boolean;
     headerStyle?: 'minimal' | 'bold' | 'classic';
     fontSize?: 'small' | 'medium' | 'large';
+    showCustomerName?: boolean;
+    showCompanyName?: boolean;
+    showCustomerAddress?: boolean;
+    showCustomerPhone?: boolean;
+    showCustomerEmail?: boolean;
 }
 
 export interface BusinessEntity {

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BusinessEntity, WorkingHoursConfig } from '../types';
 import FormModal from './FormModal';
 import { saveFile, getFile } from '../utils/imageStore';
-import { Clock, Layout, FileText, Settings, Briefcase, Building2, Upload, FileCheck, Trash2, Camera, Eye, Sparkles, Wrench } from 'lucide-react';
+import { Clock, Layout, FileText, Settings, Briefcase, Building2, Upload, FileCheck, Trash2, Camera, Eye, Sparkles, Wrench, User } from 'lucide-react';
+import { getDefaultInvoiceBlocks } from '../core/utils/documentTemplateDefaults';
 import { toast } from 'react-toastify';
 import { useReactToPrint } from 'react-to-print';
 import PrintableInvoice from './PrintableInvoice';
@@ -147,6 +148,41 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
             ...prev,
             ...updatedEntity
         }));
+    };
+
+    const invoiceCustomerBlock = formData.invoiceLayout?.blocks?.find(b => b.type === 'customer_details');
+    const isFieldActive = (field: 'showCustomerName' | 'showCompanyName' | 'showCustomerAddress' | 'showCustomerPhone' | 'showCustomerEmail') => {
+        return invoiceCustomerBlock?.settings?.[field] !== false;
+    };
+
+    const handleToggleCustomerField = (field: 'showCustomerName' | 'showCompanyName' | 'showCustomerAddress' | 'showCustomerPhone' | 'showCustomerEmail') => {
+        setFormData(prev => {
+            const currentInvoiceBlocks = prev.invoiceLayout?.blocks && prev.invoiceLayout.blocks.length > 0 
+                ? [...prev.invoiceLayout.blocks] 
+                : getDefaultInvoiceBlocks();
+            const updatedBlocks = currentInvoiceBlocks.map(b => {
+                if (b.type === 'customer_details') {
+                    const currentVal = b.settings?.[field] !== false;
+                    return {
+                        ...b,
+                        settings: {
+                            ...b.settings,
+                            [field]: !currentVal
+                        }
+                    };
+                }
+                return b;
+            });
+            return {
+                ...prev,
+                invoiceLayout: {
+                    ...(prev.invoiceLayout || { documentType: 'invoice', accentColor: prev.color || '#4f46e5' }),
+                    documentType: 'invoice',
+                    blocks: updatedBlocks,
+                    updatedAt: new Date().toISOString()
+                }
+            };
+        });
     };
 
     const tabs = [
@@ -418,6 +454,57 @@ const EntityFormModal: React.FC<EntityFormModalProps> = ({ isOpen, onClose, onSa
                                             <Layout size={14} /> Open Invoice Form Builder
                                         </button>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Billed-To Customer Field Visibility Settings */}
+                            <div className="p-6 bg-white border border-slate-200 rounded-2xl shadow-xs space-y-4">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+                                            <User size={22} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-black text-slate-900 uppercase text-xs tracking-tight">Invoice "Invoiced / Billed To" Displayed Fields</h4>
+                                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Configure which customer information prints on invoices for this entity</p>
+                                        </div>
+                                    </div>
+                                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-1 rounded-full">
+                                        Entity Document Preference
+                                    </span>
+                                </div>
+                                <p className="text-xs text-slate-600">
+                                    Choose exactly what customer details appear in the "Invoiced To" block (e.g. hide phone and email, show address only, or just contact name).
+                                </p>
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-1">
+                                    {[
+                                        { key: 'showCustomerName', label: 'Contact Name', desc: 'Forename & surname' },
+                                        { key: 'showCompanyName', label: 'Company Name', desc: 'Business name' },
+                                        { key: 'showCustomerAddress', label: 'Address Details', desc: 'Street, city & postcode' },
+                                        { key: 'showCustomerPhone', label: 'Phone Number', desc: 'Telephone & mobile' },
+                                        { key: 'showCustomerEmail', label: 'Email Address', desc: 'Billing email' },
+                                    ].map(({ key, label, desc }) => {
+                                        const active = isFieldActive(key as any);
+                                        return (
+                                            <label 
+                                                key={key} 
+                                                className={`p-3 rounded-xl border transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                                                    active ? 'border-indigo-500 bg-indigo-50/40 shadow-2xs' : 'border-slate-200 bg-slate-50/50 opacity-60'
+                                                }`}
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-bold text-slate-900">{label}</span>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={active}
+                                                        onChange={() => handleToggleCustomerField(key as any)}
+                                                        className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                    />
+                                                </div>
+                                                <span className="text-[10px] text-slate-500">{desc}</span>
+                                            </label>
+                                        );
+                                    })}
                                 </div>
                             </div>
 

@@ -196,4 +196,49 @@ describe('PrintableInvoice - Multi-Page Print Layout', () => {
         expect(tbody).toHaveTextContent('TOTAL DUE:');
         expect(tbody?.querySelector('.page-break-inside-avoid')).toBeInTheDocument();
     });
+
+    it('respects entity configuration to hide phone and email or show only name in billed to section', () => {
+        const entityWithCustomCustomerLayout: BusinessEntity = {
+            ...mockEntity,
+            invoiceLayout: {
+                documentType: 'invoice',
+                blocks: [
+                    {
+                        id: 'inv_customer',
+                        type: 'customer_details',
+                        title: 'Invoiced To',
+                        visible: true,
+                        order: 1,
+                        settings: {
+                            showCustomerName: true,
+                            showCompanyName: false,
+                            showCustomerAddress: true,
+                            showCustomerPhone: false,
+                            showCustomerEmail: false
+                        }
+                    }
+                ]
+            }
+        };
+
+        render(
+            <PrintableInvoice
+                invoice={mockInvoice}
+                customer={mockCustomer}
+                vehicle={mockVehicle}
+                entity={entityWithCustomCustomerLayout}
+                job={mockJob}
+                taxRates={mockTaxRates}
+                servicePackages={[]}
+                inspectionTemplates={[]}
+                inspectionDiagrams={[]}
+            />
+        );
+
+        const tbody = document.querySelector('tbody.print-body-group');
+        expect(tbody).toHaveTextContent('Gordon Freeman');
+        expect(tbody).toHaveTextContent('Black Mesa Research Facility');
+        expect(tbody).not.toHaveTextContent('07700 900123');
+        expect(tbody).not.toHaveTextContent('Phone:');
+    });
 });

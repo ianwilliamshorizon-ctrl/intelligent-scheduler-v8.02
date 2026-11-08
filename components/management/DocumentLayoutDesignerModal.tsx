@@ -569,6 +569,88 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                     </div>
                                                 )}
 
+                                                {/* Customer / Billed To Fields Display Configuration */}
+                                                {(def.supportedSettings.hasCustomerFieldsToggle || block.type === 'customer_details') && (
+                                                    <div className="space-y-2 p-2.5 bg-slate-50 rounded-lg border border-slate-200">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="font-bold text-slate-800 text-[11px] flex items-center gap-1.5">
+                                                                <User size={13} className="text-indigo-600" />
+                                                                <span>Displayed Customer & Billed-To Fields</span>
+                                                            </div>
+                                                        </div>
+                                                        <p className="text-[10px] text-slate-500 leading-normal">
+                                                            Configure which customer details are displayed on documents for this entity.
+                                                        </p>
+
+                                                        <div className="space-y-1.5 pt-1">
+                                                            <label className="flex items-center justify-between p-2 bg-white rounded border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                                                                <div>
+                                                                    <div className="font-bold text-slate-800 text-[11px]">Customer / Contact Name</div>
+                                                                    <div className="text-[10px] text-slate-500">Forename and surname of individual contact</div>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={block.settings?.showCustomerName !== false}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'showCustomerName', e.target.checked)}
+                                                                    className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                                />
+                                                            </label>
+
+                                                            <label className="flex items-center justify-between p-2 bg-white rounded border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                                                                <div>
+                                                                    <div className="font-bold text-slate-800 text-[11px]">Company Name</div>
+                                                                    <div className="text-[10px] text-slate-500">Business or account name if recorded</div>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={block.settings?.showCompanyName !== false}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'showCompanyName', e.target.checked)}
+                                                                    className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                                />
+                                                            </label>
+
+                                                            <label className="flex items-center justify-between p-2 bg-white rounded border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                                                                <div>
+                                                                    <div className="font-bold text-slate-800 text-[11px]">Address Details</div>
+                                                                    <div className="text-[10px] text-slate-500">Address lines, town/city, and postcode</div>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={block.settings?.showCustomerAddress !== false}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'showCustomerAddress', e.target.checked)}
+                                                                    className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                                />
+                                                            </label>
+
+                                                            <label className="flex items-center justify-between p-2 bg-white rounded border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                                                                <div>
+                                                                    <div className="font-bold text-slate-800 text-[11px]">Telephone / Mobile</div>
+                                                                    <div className="text-[10px] text-slate-500">Contact telephone or mobile numbers</div>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={block.settings?.showCustomerPhone !== false}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'showCustomerPhone', e.target.checked)}
+                                                                    className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                                />
+                                                            </label>
+
+                                                            <label className="flex items-center justify-between p-2 bg-white rounded border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+                                                                <div>
+                                                                    <div className="font-bold text-slate-800 text-[11px]">Email Address</div>
+                                                                    <div className="text-[10px] text-slate-500">Customer billing email address</div>
+                                                                </div>
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={block.settings?.showCustomerEmail !== false}
+                                                                    onChange={(e) => handleUpdateBlockSetting(block.id, 'showCustomerEmail', e.target.checked)}
+                                                                    className="h-4 w-4 text-indigo-600 rounded cursor-pointer accent-indigo-600"
+                                                                />
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                )}
+
                                                 {/* Price Toggles (e.g. for Tasks or Parts) */}
                                                 {def.supportedSettings.hasPriceToggle && (
                                                     <div className="flex items-center justify-between p-2 bg-slate-50 rounded-lg border border-slate-200">
@@ -1012,10 +1094,33 @@ export const DocumentLayoutDesignerModal: React.FC<DocumentLayoutDesignerModalPr
                                                 </div>
                                                 <div className={cs.bodyClass}>
                                                     <div className="text-xs space-y-0.5" style={cs.textStyle}>
-                                                        <div className="font-bold text-sm">Dr. Anthony Harrington</div>
-                                                        <div>42 Manor House Gardens, Sunningdale</div>
-                                                        <div>Ascot, Berkshire, <span className="font-semibold uppercase">SL5 9PQ</span></div>
-                                                        <div style={cs.subtextStyle}>Phone: <span className="font-semibold">07891 234567</span> | Email: <span className="font-semibold">anthony.h@example.com</span></div>
+                                                        {block.settings?.showCompanyName !== false && (
+                                                            <div className="font-bold text-sm text-gray-900">Harrington Tech Ltd</div>
+                                                        )}
+                                                        {block.settings?.showCustomerName !== false && (
+                                                            <div className={block.settings?.showCompanyName !== false ? "text-xs font-semibold text-gray-700" : "font-bold text-sm"}>
+                                                                Dr. Anthony Harrington
+                                                            </div>
+                                                        )}
+                                                        {block.settings?.showCustomerAddress !== false && (
+                                                            <>
+                                                                <div>42 Manor House Gardens, Sunningdale</div>
+                                                                <div>Ascot, Berkshire, <span className="font-semibold uppercase">SL5 9PQ</span></div>
+                                                            </>
+                                                        )}
+                                                        {(block.settings?.showCustomerPhone !== false || block.settings?.showCustomerEmail !== false) && (
+                                                            <div style={cs.subtextStyle}>
+                                                                {block.settings?.showCustomerPhone !== false && (
+                                                                    <span>Phone: <span className="font-semibold">07891 234567</span></span>
+                                                                )}
+                                                                {block.settings?.showCustomerPhone !== false && block.settings?.showCustomerEmail !== false && (
+                                                                    <span> | </span>
+                                                                )}
+                                                                {block.settings?.showCustomerEmail !== false && (
+                                                                    <span>Email: <span className="font-semibold">anthony.h@example.com</span></span>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>

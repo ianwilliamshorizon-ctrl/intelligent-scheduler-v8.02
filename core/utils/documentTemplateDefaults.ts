@@ -23,6 +23,7 @@ export interface BlockDefinition {
         hasCustomTerms?: boolean;
         hasCustomFooter?: boolean;
         hasStyleControl?: boolean;
+        hasCustomerFieldsToggle?: boolean;
     };
 }
 
@@ -62,6 +63,7 @@ export const BLOCK_DEFINITIONS: Record<DocumentBlockType, BlockDefinition> = {
         supportedSettings: {
             canChangeTitle: true,
             hasStyleControl: true,
+            hasCustomerFieldsToggle: true,
         }
     },
     vehicle_details: {
@@ -223,7 +225,15 @@ export const DEFAULT_JOB_CARD_BLOCKS: DocumentBlockConfig[] = [
         title: 'Customer Details',
         visible: true,
         order: 3,
-        settings: { columns: 2, style: 'boxed' }
+        settings: { 
+            columns: 2, 
+            style: 'boxed',
+            showCompanyName: true,
+            showCustomerName: true,
+            showCustomerAddress: true,
+            showCustomerPhone: true,
+            showCustomerEmail: true
+        }
     },
     {
         id: 'block_vehicle',
@@ -298,7 +308,14 @@ export const DEFAULT_INVOICE_BLOCKS: DocumentBlockConfig[] = [
         title: 'Invoiced To',
         visible: true,
         order: 3,
-        settings: { style: 'standard' }
+        settings: { 
+            style: 'standard',
+            showCompanyName: true,
+            showCustomerName: true,
+            showCustomerAddress: true,
+            showCustomerPhone: true,
+            showCustomerEmail: true
+        }
     },
     {
         id: 'inv_vehicle',
