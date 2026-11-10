@@ -6,6 +6,7 @@ import { exportServicePackagesToCsv } from '../../../utils/servicePackageImportU
 import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
 import { ImportServicePackagesModal } from '../ImportServicePackagesModal';
+import { PrintableServicePackageCatalogModal } from '../PrintableServicePackageCatalogModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { useApp } from '../../../core/state/AppContext';
 import { AlertCircle, Zap, Percent, PoundSterling, Check } from 'lucide-react';
@@ -31,6 +32,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
     const [selectedPackage, setSelectedPackage] = useState<ServicePackage | null>(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false);
     
     // Sort and Filter States
     const [sortField, setSortField] = useState<SortField>('name');
@@ -272,15 +274,14 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     >
                         <Download size={17}/> Export CSV
                     </button>
-                    <a 
-                        href="/downloads/service_packages_catalog.pdf"
-                        target="_blank"
-                        rel="noopener noreferrer"
+                    <button 
+                        type="button"
+                        onClick={() => setIsCatalogModalOpen(true)}
                         className="bg-rose-700 hover:bg-rose-800 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95 cursor-pointer"
-                        title="Open and download the publication-ready Service Packages Catalog (PDF)"
+                        title="Open live publication catalogue and print or save as PDF"
                     >
                         <FileText size={17}/> Publication (PDF)
-                    </a>
+                    </button>
                     <button 
                         onClick={() => setIsBulkPanelOpen(!isBulkPanelOpen)}
                         className={`px-3.5 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all text-sm ${isBulkPanelOpen ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}
@@ -453,6 +454,16 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                         });
                     }}
                     onShowStatus={onShowStatus}
+                />
+            )}
+
+            {isCatalogModalOpen && (
+                <PrintableServicePackageCatalogModal
+                    isOpen={isCatalogModalOpen}
+                    onClose={() => setIsCatalogModalOpen(false)}
+                    packages={filteredAndSortedPackages}
+                    businessEntities={businessEntities}
+                    selectedEntityId={entityFilter}
                 />
             )}
         </div>
