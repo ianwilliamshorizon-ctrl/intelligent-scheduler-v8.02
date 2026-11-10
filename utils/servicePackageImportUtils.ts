@@ -920,3 +920,81 @@ export const downloadServicePackageExcelTemplate = async (businessEntities: Busi
         downloadServicePackageCsvTemplate(businessEntities);
     }
 };
+
+
+/**
+ * Exports service packages array to a neatly formatted CSV file and triggers download
+ */
+export const exportServicePackagesToCsv = (
+    packages: ServicePackage[],
+    businessEntities: BusinessEntity[] = [],
+    filename: string = 'service_packages_export.csv'
+) => {
+    const entityMap = new Map((businessEntities || []).map(e => [e.id, e.name || 'Universal']));
+    
+    const headers = [
+        "Package Name",
+        "Business Entity",
+        "Package Description",
+        "Vehicle Make",
+        "Vehicle Model",
+        "Vehicle Variant",
+        "Engine Size",
+        "Item Type",
+        "Item Description",
+        "Part Number",
+        "Quantity",
+        "Unit Price",
+        "Unit Cost",
+        "Tax Code",
+        "Package Fixed Price Gross"
+    ];
+
+    const rows: string[][] = [headers];
+
+    (packages || []).forEach(pkg => {
+        const entityName = (pkg.entityId ? entityMap.get(pkg.entityId) : null) || 'Brookspeed Porsche & Performance';
+        const costItems = (pkg.costItems && pkg.costItems.length > 0) ? pkg.costItems : [
+            {
+                description: pkg.name || 'Service Package',
+                isLabor: true,
+                quantity: 1,
+                unitPrice: pkg.totalPrice || 0,
+                unitCost: pkg.totalCost || 0,
+                taxCodeId: pkg.taxCodeId || 'tax_2'
+            } as any
+        ];
+
+        costItems.forEach((item, idx) => {
+            const isFirstRow = idx === 0;
+            rows.push([
+                pkg.name || '',
+                entityName,
+                isFirstRow ? (pkg.description || '') : '',
+                isFirstRow ? (pkg.applicableMake || '') : '',
+                isFirstRow ? (pkg.applicableModel || '') : '',
+                isFirstRow ? (pkg.applicableVariant || '') : '',
+                isFirstRow && pkg.applicableEngineSize ? String(pkg.applicableEngineSize) : '',
+                item.isLabor || item.type === 'labor' ? 'Labour' : 'Part',
+                item.description || '',
+                item.partNumber || '',
+                String(item.quantity ?? 1),
+                Number(item.unitPrice || 0).toFixed(2),
+                Number(item.unitCost || 0).toFixed(2),
+                item.taxCodeId === 'tax_1' || item.taxCodeId === 'T0' ? 'T0' : 'T1',
+                isFirstRow && pkg.totalPrice ? Number(pkg.totalPrice).toFixed(2) : ''
+            ]);
+        });
+    });
+
+    const csvContent = rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\r\n');
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+};

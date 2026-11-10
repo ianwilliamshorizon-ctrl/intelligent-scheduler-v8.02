@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { ServicePackage, BusinessEntity } from '../../../types';
-import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud, Sparkles } from 'lucide-react';
+import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud, Sparkles, Download } from 'lucide-react';
+import { exportServicePackagesToCsv } from '../../../utils/servicePackageImportUtils';
 import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
 import { ImportServicePackagesModal } from '../ImportServicePackagesModal';
@@ -191,6 +192,18 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
         }
     };
 
+    const handleExportCsv = () => {
+        if (!filteredAndSortedPackages || filteredAndSortedPackages.length === 0) {
+            onShowStatus('No service packages available to export.', 'error');
+            return;
+        }
+        const filename = entityFilter !== 'all' 
+            ? `service_packages_${businessEntities.find(e => e.id === entityFilter)?.shortCode || 'entity'}.csv`
+            : 'service_packages_export.csv';
+        exportServicePackagesToCsv(filteredAndSortedPackages, businessEntities, filename);
+        onShowStatus(`Exported ${filteredAndSortedPackages.length} service packages to CSV.`, 'success');
+    };
+
     return (
         <div className="p-4">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 bg-gray-50 p-4 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
@@ -251,6 +264,13 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                         title="Import service packages from CSV or Excel file"
                     >
                         <UploadCloud size={17}/> Import Packages
+                    </button>
+                    <button 
+                        onClick={handleExportCsv}
+                        className="bg-slate-700 hover:bg-slate-800 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95 cursor-pointer"
+                        title="Export filtered service packages to neatly formatted CSV"
+                    >
+                        <Download size={17}/> Export CSV
                     </button>
                     <button 
                         onClick={() => setIsBulkPanelOpen(!isBulkPanelOpen)}
