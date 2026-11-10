@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../../core/state/DataContext';
 import { ServicePackage, BusinessEntity } from '../../../types';
-import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud, Sparkles, Download } from 'lucide-react';
+import { PlusCircle, Copy, Trash2, ArrowUpDown, Filter, X, UploadCloud, Sparkles, Download, FileText } from 'lucide-react';
 import { exportServicePackagesToCsv } from '../../../utils/servicePackageImportUtils';
 import { formatCurrency } from '../../../utils/formatUtils';
 import ServicePackageFormModal from '../../ServicePackageFormModal';
@@ -250,7 +250,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     )}
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <button 
                         onClick={handleSeedStandardPackages}
                         className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95"
@@ -272,6 +272,15 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     >
                         <Download size={17}/> Export CSV
                     </button>
+                    <a 
+                        href="/downloads/service_packages_catalog.pdf"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="bg-rose-700 hover:bg-rose-800 text-white px-3.5 py-2 rounded-lg shadow-sm flex items-center gap-2 transition-all font-semibold text-sm active:scale-95 cursor-pointer"
+                        title="Open and download the publication-ready Service Packages Catalog (PDF)"
+                    >
+                        <FileText size={17}/> Publication (PDF)
+                    </a>
                     <button 
                         onClick={() => setIsBulkPanelOpen(!isBulkPanelOpen)}
                         className={`px-3.5 py-2 rounded-lg font-semibold flex items-center gap-2 transition-all text-sm ${isBulkPanelOpen ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'}`}

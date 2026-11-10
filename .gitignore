@@ -32,4 +32,4 @@ backups/
 .agents/
 .firebase/
 *.apk
-public/downloads/
+public/downloads/*.apk
