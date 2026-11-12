@@ -1,5 +1,5 @@
 import { Job, JobSegment, Lift, Engineer, AbsenceRequest, BusinessEntity } from '../../../types';
-import { formatDate, dateStringToDate, addDays, formatReadableDate } from '../../../core/utils/dateUtils';
+import { formatDate, dateStringToDate, addDays, formatReadableDate, getTodayISOString, addDaysToDateStr } from '../../../core/utils/dateUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../../constants';
 import { 
     DailyCapacitySummary, 
@@ -592,6 +592,26 @@ export const findSpareCapacitySlots = (params: {
 };
 
 /**
+ * Returns the next valid open working date (>= todayStr), skipping Sundays and bank holidays.
+ */
+export const getNextRollTargetDate = (
+    todayStr: string = getTodayISOString(),
+    bankHolidays?: Map<string, string[]>
+): string => {
+    let candidate = todayStr;
+    for (let i = 0; i < 14; i++) {
+        const d = dateStringToDate(candidate);
+        const isSunday = d.getUTCDay() === 0;
+        const isHoliday = (bankHolidays?.get(candidate)?.length || 0) > 0;
+        if (!isSunday && !isHoliday) {
+            return candidate;
+        }
+        candidate = addDaysToDateStr(candidate, 1);
+    }
+    return todayStr;
+};
+
+/**
  * Analyzes workshop schedules to extract ONLY actionable warnings and exceptions.
  */
 export const findCapacityWarnings = (params: {
@@ -605,6 +625,7 @@ export const findCapacityWarnings = (params: {
     selectedEntityId: string;
     bankHolidays?: Map<string, string[]>;
     users?: any[];
+    todayStr?: string;
 }): CapacityWarning[] => {
     const {
         startDate,
@@ -616,7 +637,8 @@ export const findCapacityWarnings = (params: {
         businessEntities,
         selectedEntityId,
         bankHolidays,
-        users
+        users,
+        todayStr = getTodayISOString()
     } = params;
 
     const warnings: CapacityWarning[] = [];
@@ -654,16 +676,61 @@ export const findCapacityWarnings = (params: {
         }
     }
 
-    // 2. Check for Jobs with Missing / Unassigned Resources (scheduled date but no bay or engineer)
+    // 2. Check for Overdue Unassigned Jobs (date passed without allocation) & Incomplete Allocated Segments
     const upcomingDateLimit = formatDate(addDays(startDate, daysToCheck));
     const startStr = formatDate(startDate);
 
     jobs.forEach(job => {
-        if (job.status === 'Cancelled' || job.status === 'Invoiced' || job.status === 'Complete') return;
+        if (['Cancelled', 'Invoiced', 'Complete', 'Closed', 'Archived'].includes(job.status)) return;
         if (selectedEntityId !== 'all' && job.entityId && job.entityId !== selectedEntityId) return;
 
-        (job.segments || []).forEach(seg => {
-            if (seg.status === 'Cancelled') return;
+        const segments = job.segments || [];
+        if (segments.length === 0) {
+            if (job.status === 'Unallocated' && job.scheduledDate && job.scheduledDate < todayStr) {
+                warnings.push({
+                    id: `warn_overdue_unassigned_${job.id}`,
+                    type: 'overdue_unassigned',
+                    severity: 'warning',
+                    title: `Overdue Unassigned Job #${job.jobNumber || job.id.slice(-4)}`,
+                    message: `Unassigned job scheduled for ${formatReadableDate(job.scheduledDate)} has passed without allocation (${job.description || 'Workshop Job'}).`,
+                    date: job.scheduledDate,
+                    formattedDate: formatReadableDate(job.scheduledDate),
+                    jobId: job.id,
+                    jobRef: job.id,
+                    jobDescription: job.description || 'Workshop Job',
+                    suggestedAction: 'Triage and roll forward to the next open working day or assign resources'
+                });
+            }
+            return;
+        }
+
+        segments.forEach(seg => {
+            if (seg.status === 'Cancelled' || seg.status === 'Engineer Complete' || seg.status === 'QC Complete') return;
+
+            const isUnassignedState = seg.status === 'Unallocated' || (!seg.allocatedLift && !seg.engineerId);
+
+            if (isUnassignedState) {
+                // Unassigned/unallocated jobs for today or future dates are normal — only flag if their date has passed
+                if (seg.date && seg.date < todayStr) {
+                    warnings.push({
+                        id: `warn_overdue_unassigned_${job.id}_${seg.segmentId || seg.id || 'seg'}`,
+                        type: 'overdue_unassigned',
+                        severity: 'warning',
+                        title: `Overdue Unassigned Job #${job.jobNumber || job.id.slice(-4)}`,
+                        message: `Unassigned job scheduled for ${formatReadableDate(seg.date)} (${seg.duration || 1}h) has passed without allocation (${job.description || 'Workshop Job'}).`,
+                        date: seg.date,
+                        formattedDate: formatReadableDate(seg.date),
+                        jobId: job.id,
+                        segmentId: seg.segmentId || seg.id,
+                        jobRef: job.id,
+                        jobDescription: job.description || 'Workshop Job',
+                        suggestedAction: 'Triage and roll forward to the next open working day or assign resources'
+                    });
+                }
+                return;
+            }
+
+            // Allocated/active segments in the upcoming window that are missing one resource (e.g. ramp or technician)
             if (seg.date && seg.date >= startStr && seg.date <= upcomingDateLimit) {
                 const missingRamp = !seg.allocatedLift;
                 const missingTech = !seg.engineerId;
@@ -673,11 +740,12 @@ export const findCapacityWarnings = (params: {
                         id: `warn_unassigned_${job.id}_${seg.segmentId}`,
                         type: 'unassigned_resources',
                         severity: 'warning',
-                        title: `Unassigned Resource on Job #${job.id.slice(-4)}`,
-                        message: `Scheduled for ${seg.date} (${seg.duration || 1}h) but missing ${missingRamp && missingTech ? 'both Ramp and Technician' : missingRamp ? 'assigned Ramp/Bay' : 'assigned Technician'}.`,
+                        title: `Missing Resource on Scheduled Job #${job.jobNumber || job.id.slice(-4)}`,
+                        message: `Allocated for ${seg.date} (${seg.duration || 1}h) but missing ${missingRamp ? 'assigned Ramp/Bay' : 'assigned Technician'}.`,
                         date: seg.date,
                         formattedDate: formatReadableDate(seg.date),
                         jobId: job.id,
+                        segmentId: seg.segmentId || seg.id,
                         jobRef: job.id,
                         jobDescription: job.description || 'Workshop Job',
                         suggestedAction: missingRamp ? 'Assign Workshop Bay' : 'Assign Technician'

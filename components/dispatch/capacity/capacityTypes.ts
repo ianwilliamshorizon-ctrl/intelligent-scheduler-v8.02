@@ -71,7 +71,7 @@ export interface FreeCapacitySlot {
 }
 
 export type WarningSeverity = 'critical' | 'warning' | 'info';
-export type WarningType = 'overbooked' | 'gap_gt_3h' | 'staff_shortage' | 'unassigned_resources';
+export type WarningType = 'overbooked' | 'gap_gt_3h' | 'staff_shortage' | 'unassigned_resources' | 'overdue_unassigned';
 
 export interface CapacityWarning {
     id: string;
@@ -82,6 +82,7 @@ export interface CapacityWarning {
     date: string;
     formattedDate: string;
     jobId?: string;
+    segmentId?: string;
     jobRef?: string;
     jobDescription?: string;
     engineerId?: string;

@@ -1,19 +1,20 @@
 import React, { useState, useMemo } from 'react';
-import { 
-    AlertOctagon, 
-    AlertTriangle, 
-    Clock, 
-    ArrowLeft, 
-    CheckCircle2, 
-    ArrowRight, 
-    Warehouse, 
-    UserX, 
-    AlertCircle, 
-    RotateCcw 
+import {
+    AlertOctagon,
+    AlertTriangle,
+    Clock,
+    ArrowLeft,
+    CheckCircle2,
+    ArrowRight,
+    Warehouse,
+    UserX,
+    AlertCircle,
+    RotateCcw
 } from 'lucide-react';
 import { Job, Lift, Engineer, AbsenceRequest, BusinessEntity } from '../../../types';
-import { findCapacityWarnings } from './capacityUtils';
+import { findCapacityWarnings, getNextRollTargetDate } from './capacityUtils';
 import { CapacityWarning, WarningSeverity, WarningType } from './capacityTypes';
+import { getTodayISOString, formatReadableDate } from '../../../core/utils/dateUtils';
 
 interface CapacityWarningsPanelProps {
     startDate: Date;
@@ -28,6 +29,8 @@ interface CapacityWarningsPanelProps {
     onBackToWeekly: () => void;
     onJumpToDay: (dateStr: string) => void;
     onEditJob?: (jobId: string) => void;
+    onRollOverdueJob?: (jobId: string, segmentId?: string) => void;
+    onRollAllOverdue?: (items: { jobId: string; segmentId?: string }[]) => void;
 }
 
 export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
@@ -42,10 +45,18 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
     users,
     onBackToWeekly,
     onJumpToDay,
-    onEditJob
+    onEditJob,
+    onRollOverdueJob,
+    onRollAllOverdue
 }) => {
     const [selectedType, setSelectedType] = useState<WarningType | 'all'>('all');
     const [selectedSeverity, setSelectedSeverity] = useState<WarningSeverity | 'all'>('all');
+
+    const todayStr = getTodayISOString();
+    const rollTargetDate = useMemo(() => getNextRollTargetDate(todayStr, bankHolidays), [todayStr, bankHolidays]);
+    const rollActionLabel = rollTargetDate === todayStr
+        ? 'Roll to Today'
+        : `Roll to ${formatReadableDate(rollTargetDate)}`;
 
     // Extract ONLY exceptions & risks across next 4 weeks
     const warnings = useMemo(() => {
@@ -77,10 +88,17 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
         return {
             all: warnings.length,
             overbooked: warnings.filter(w => w.type === 'overbooked').length,
+            overdue_unassigned: warnings.filter(w => w.type === 'overdue_unassigned').length,
             unassigned_resources: warnings.filter(w => w.type === 'unassigned_resources').length,
             staff_shortage: warnings.filter(w => w.type === 'staff_shortage').length,
             gap_gt_3h: warnings.filter(w => w.type === 'gap_gt_3h').length
         };
+    }, [warnings]);
+
+    const overdueItems = useMemo(() => {
+        return warnings
+            .filter(w => w.type === 'overdue_unassigned' && w.jobId)
+            .map(w => ({ jobId: w.jobId!, segmentId: w.segmentId }));
     }, [warnings]);
 
     const renderSeverityBadge = (severity: WarningSeverity) => {
@@ -136,12 +154,21 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${
-                        warnings.length > 0 
-                            ? 'bg-red-50 text-red-700 border-red-200 animate-pulse' 
+                <div className="flex flex-wrap items-center gap-2">
+                    {overdueItems.length > 1 && onRollAllOverdue && (
+                        <button
+                            onClick={() => onRollAllOverdue(overdueItems)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-black bg-amber-600 hover:bg-amber-700 text-white shadow-sm transition cursor-pointer"
+                            title={`Move all ${overdueItems.length} overdue unassigned jobs to ${formatReadableDate(rollTargetDate)}`}
+                        >
+                            <RotateCcw size={13} />
+                            <span>Roll All Overdue ({overdueItems.length})</span>
+                        </button>
+                    )}
+                    <span className={`px-3 py-1.5 rounded-xl text-xs font-black border ${warnings.length > 0
+                            ? 'bg-red-50 text-red-700 border-red-200 animate-pulse'
                             : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    }`}>
+                        }`}>
                         {warnings.length === 0 ? 'All Clear (0 Exceptions)' : `${warnings.length} Exceptions Require Attention`}
                     </span>
                 </div>
@@ -152,23 +179,22 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
                 {[
                     { key: 'all', label: 'All Exceptions', count: countsByType.all },
                     { key: 'overbooked', label: 'Overbooked Days', count: countsByType.overbooked },
-                    { key: 'unassigned_resources', label: 'Missing Resources', count: countsByType.unassigned_resources },
+                    { key: 'overdue_unassigned', label: 'Overdue Unassigned', count: countsByType.overdue_unassigned },
+                    ...(countsByType.unassigned_resources > 0 ? [{ key: 'unassigned_resources', label: 'Missing Resources', count: countsByType.unassigned_resources }] : []),
                     { key: 'staff_shortage', label: 'Staff Shortages', count: countsByType.staff_shortage },
                     { key: 'gap_gt_3h', label: 'Idle Gaps >3h', count: countsByType.gap_gt_3h }
                 ].map(({ key, label, count }) => (
                     <button
                         key={key}
                         onClick={() => setSelectedType(key as any)}
-                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                            selectedType === key
+                        className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${selectedType === key
                                 ? 'bg-indigo-600 text-white shadow-sm'
                                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                        }`}
+                            }`}
                     >
                         <span>{label}</span>
-                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
-                            selectedType === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-700'
-                        }`}>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${selectedType === key ? 'bg-white/30 text-white' : 'bg-slate-200 text-slate-700'
+                            }`}>
                             {count}
                         </span>
                     </button>
@@ -189,13 +215,12 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
                     filteredWarnings.map(warning => (
                         <div
                             key={warning.id}
-                            className={`p-4 bg-white rounded-2xl border shadow-sm transition hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-                                warning.severity === 'critical' 
-                                    ? 'border-red-200/90 hover:border-red-400' 
-                                    : warning.severity === 'warning' 
-                                        ? 'border-amber-200/90 hover:border-amber-400' 
+                            className={`p-4 bg-white rounded-2xl border shadow-sm transition hover:shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 ${warning.severity === 'critical'
+                                    ? 'border-red-200/90 hover:border-red-400'
+                                    : warning.severity === 'warning'
+                                        ? 'border-amber-200/90 hover:border-amber-400'
                                         : 'border-slate-200/90 hover:border-indigo-300'
-                            }`}
+                                }`}
                         >
                             <div className="flex items-start gap-3.5">
                                 <div className="mt-0.5">
@@ -226,11 +251,22 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex items-center gap-2 flex-shrink-0 self-end md:self-center">
+                            <div className="flex flex-wrap items-center gap-2 flex-shrink-0 self-end md:self-center">
+                                {warning.type === 'overdue_unassigned' && warning.jobId && onRollOverdueJob && (
+                                    <button
+                                        onClick={() => onRollOverdueJob(warning.jobId!, warning.segmentId)}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-black text-white bg-amber-600 hover:bg-amber-700 rounded-xl shadow-sm transition cursor-pointer"
+                                        title={`Roll this overdue unassigned job forward to ${formatReadableDate(rollTargetDate)}`}
+                                    >
+                                        <RotateCcw size={13} />
+                                        <span>{rollActionLabel}</span>
+                                    </button>
+                                )}
+
                                 {warning.jobId && onEditJob && (
                                     <button
                                         onClick={() => onEditJob(warning.jobId!)}
-                                        className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition"
+                                        className="px-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
                                     >
                                         Edit Job
                                     </button>
@@ -238,7 +274,7 @@ export const CapacityWarningsPanel: React.FC<CapacityWarningsPanelProps> = ({
 
                                 <button
                                     onClick={() => onJumpToDay(warning.date)}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-black text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition cursor-pointer"
                                 >
                                     <span>Triage Day</span>
                                     <ArrowRight size={14} />

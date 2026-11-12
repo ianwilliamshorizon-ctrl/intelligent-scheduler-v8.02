@@ -3,7 +3,7 @@ import { useApp } from '../../core/state/AppContext';
 import { useData } from '../../core/state/DataContext';
 import { Job, JobSegment, Lift, PurchaseOrder, Estimate, Engineer } from '../../types';
 import { saveDocument } from '../../core/db';
-import { dateStringToDate, getRelativeDate, addDays, getStartOfWeek, formatDate } from '../../core/utils/dateUtils';
+import { dateStringToDate, getRelativeDate, addDays, getStartOfWeek, formatDate, getTodayISOString } from '../../core/utils/dateUtils';
 import { calculateJobStatus } from '../../core/utils/jobUtils';
 import { TIME_SEGMENTS, SEGMENT_DURATION_MINUTES } from '../../constants';
 import DatePickerModal from '../../components/DatePickerModal';
@@ -27,7 +27,7 @@ import { MonthlyCapacityOverview } from '../../components/dispatch/capacity/Mont
 import { DailyBreakdownCapacityView } from '../../components/dispatch/capacity/DailyBreakdownCapacityView';
 import { SpareCapacitySearchView } from '../../components/dispatch/capacity/SpareCapacitySearchView';
 import { CapacityWarningsPanel } from '../../components/dispatch/capacity/CapacityWarningsPanel';
-import { findCapacityWarnings } from '../../components/dispatch/capacity/capacityUtils';
+import { findCapacityWarnings, getNextRollTargetDate } from '../../components/dispatch/capacity/capacityUtils';
 
 interface DispatchViewProps {
     setDefaultDateForModal: (date: Date | null) => void;
@@ -50,19 +50,19 @@ interface DispatchViewProps {
     onEngineerComplete?: (job: Job, segmentId: string) => void;
 }
 
-const DispatchView: React.FC<DispatchViewProps> = ({ 
-    setDefaultDateForModal, 
-    setIsSmartCreateOpen, 
-    setSmartCreateMode, 
-    setSelectedJobId, 
-    setIsEditModalOpen, 
-    onOpenPurchaseOrder, 
-    onPause, 
-    onRestart, 
-    onReassignEngineer, 
-    onCheckIn, 
-    onOpenAssistant, 
-    onUnscheduleSegment, 
+const DispatchView: React.FC<DispatchViewProps> = ({
+    setDefaultDateForModal,
+    setIsSmartCreateOpen,
+    setSmartCreateMode,
+    setSelectedJobId,
+    setIsEditModalOpen,
+    onOpenPurchaseOrder,
+    onPause,
+    onRestart,
+    onReassignEngineer,
+    onCheckIn,
+    onOpenAssistant,
+    onUnscheduleSegment,
     onSendOffsite,
     onPassToSales,
     onStartWork,
@@ -71,7 +71,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     onEngineerComplete
 }) => {
     const { jobs, setJobs, lifts, engineers, setEngineers, customers, vehicles, purchaseOrders, setPurchaseOrders, absenceRequests, businessEntities, estimates, setEstimates, parts, forceRefresh, saveRecord, storageLocations } = useData();
-    
+
     // Auto-refresh data every 30 seconds to keep all users in sync
     useEffect(() => {
         const interval = setInterval(() => {
@@ -79,22 +79,22 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             forceRefresh('brooks_jobs' as any);
             forceRefresh('brooks_vehicles' as any);
             forceRefresh('brooks_customers' as any);
-        }, 30000); 
+        }, 30000);
         return () => clearInterval(interval);
     }, [forceRefresh]);
     const { selectedEntityId, currentUser, users, setUsers } = useApp();
-    
+
     // -- View State --
     const [viewMode, setViewMode] = useState<DispatchViewMode>('capacity-weekly');
     const [currentDate, setCurrentDate] = useState(getRelativeDate(0));
     const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
     const [unallocatedDateFilter, setUnallocatedDateFilter] = useState<'all' | 'today' | '7days' | '14days'>('all');
     const [showOnSiteOnly, setShowOnSiteOnly] = useState(false);
-    
+
     // -- Date Navigation State --
     const [currentMonthDate, setCurrentMonthDate] = useState(dateStringToDate(getRelativeDate(0)));
     const [weekStart, setWeekStart] = useState(() => getStartOfWeek(new Date()));
-    
+
     // -- Modal State --
     const [assignModalData, setAssignModalData] = useState<{ job: Job, segment: JobSegment, lift: Lift, startSegmentIndex: number, currentEngineerId?: string | null } | null>(null);
     const [reassignModalData, setReassignModalData] = useState<{ jobId: string; segmentId: string; liftName: string; startSegmentIndex: number; currentEngineerId?: string | null; } | null>(null);
@@ -109,20 +109,20 @@ const DispatchView: React.FC<DispatchViewProps> = ({
     }, []);
 
     // -- Derived Data via Hooks --
-    const { 
-        entityEngineers, 
+    const {
+        entityEngineers,
         allValidEngineers,
         entityLifts,
-        unallocatedJobs, 
-        allocatedSegmentsByLift 
+        unallocatedJobs,
+        allocatedSegmentsByLift
     } = useDispatchFilters({
-        jobs: jobs.filter(job => job.status !== 'Cancelled'), 
-        lifts, 
-        engineers, 
-        businessEntities, 
-        selectedEntityId, 
-        currentDate, 
-        unallocatedDateFilter, 
+        jobs: jobs.filter(job => job.status !== 'Cancelled'),
+        lifts,
+        engineers,
+        businessEntities,
+        selectedEntityId,
+        currentDate,
+        unallocatedDateFilter,
         showOnSiteOnly,
         users
     });
@@ -169,9 +169,9 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         const map = new Map<string, number>();
         absenceRequests.forEach(req => {
             if (req.status === 'Approved' || req.status === 'Pending') {
-                 let curr = dateStringToDate(req.startDate);
-                 const end = dateStringToDate(req.endDate);
-                 while(curr <= end) {
+                let curr = dateStringToDate(req.startDate);
+                const end = dateStringToDate(req.endDate);
+                while (curr <= end) {
                     const dateStr = formatDate(curr);
                     map.set(dateStr, (map.get(dateStr) || 0) + 8);
                     curr = addDays(curr, 1);
@@ -180,11 +180,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         });
         return map;
     }, [absenceRequests]);
-    
+
     const dailyCapacity = useMemo(() => {
         return businessEntities.find(e => e.id === selectedEntityId)?.dailyCapacityHours || 40;
     }, [businessEntities, selectedEntityId]);
-    
+
     const handleReassignClick = (jobId: string, segmentId: string) => {
         const job = jobs.find(j => j.id === jobId);
         const segment = job?.segments.find(s => s.segmentId === segmentId);
@@ -200,7 +200,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             });
         }
     };
-    
+
     const handleReassignConfirm = (engineerId: string) => {
         if (!reassignModalData) return;
         onReassignEngineer(reassignModalData.jobId, reassignModalData.segmentId, engineerId);
@@ -227,6 +227,58 @@ const DispatchView: React.FC<DispatchViewProps> = ({
             users
         });
     }, [currentDate, jobs, lifts, entityEngineers, absenceRequests, businessEntities, selectedEntityId, bankHolidays, users]);
+
+    const rollJobsForward = async (items: { jobId: string; segmentId?: string }[]) => {
+        if (!items || items.length === 0) return;
+        const todayStr = getTodayISOString();
+        const targetDate = getNextRollTargetDate(todayStr, bankHolidays);
+
+        const segsByJob = new Map<string, Set<string>>();
+        const allSegsForJob = new Set<string>();
+        items.forEach(({ jobId, segmentId }) => {
+            if (!segmentId) {
+                allSegsForJob.add(jobId);
+            } else {
+                if (!segsByJob.has(jobId)) segsByJob.set(jobId, new Set());
+                segsByJob.get(jobId)!.add(segmentId);
+            }
+        });
+
+        const updatedById = new Map<string, Job>();
+        jobs.forEach(job => {
+            const targetSegIds = segsByJob.get(job.id);
+            const rollAllJobSegs = allSegsForJob.has(job.id);
+            if (!targetSegIds && !rollAllJobSegs) return;
+
+            const updatedSegments = (job.segments || []).map(seg => {
+                const segKey = seg.segmentId || seg.id || '';
+                const isUnassigned = seg.status === 'Unallocated' || (!seg.allocatedLift && !seg.engineerId);
+                const shouldRoll = rollAllJobSegs
+                    ? (isUnassigned && !!seg.date && seg.date < todayStr)
+                    : (targetSegIds?.has(segKey) || false);
+
+                return shouldRoll ? { ...seg, date: targetDate } : seg;
+            });
+
+            updatedById.set(job.id, {
+                ...job,
+                scheduledDate: (!job.scheduledDate || job.scheduledDate < todayStr) ? targetDate : job.scheduledDate,
+                segments: updatedSegments
+            });
+        });
+
+        if (updatedById.size === 0) return;
+
+        setJobs(prev => prev.map(j => updatedById.get(j.id) || j));
+
+        for (const updatedJob of updatedById.values()) {
+            if (saveRecord) {
+                await saveRecord('jobs', updatedJob);
+            } else {
+                await saveDocument('brooks_jobs', updatedJob);
+            }
+        }
+    };
 
     const handleBookJobForDate = (dateStr?: string) => {
         const targetDate = dateStr ? dateStringToDate(dateStr) : dateStringToDate(currentDate);
@@ -412,9 +464,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         setViewMode('daily-breakdown');
                     }}
                     onEditJob={handleEditJob}
+                    onRollOverdueJob={(jobId, segmentId) => rollJobsForward([{ jobId, segmentId }])}
+                    onRollAllOverdue={(items) => rollJobsForward(items)}
                 />
             )}
-            
+
             {viewMode === 'timeline' && (
                 <TimelineView
                     lifts={entityLifts}
@@ -446,7 +500,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onEngineerComplete={onEngineerComplete}
                 />
             )}
-            
+
             {viewMode === 'calendar' && (
                 <div className="flex-grow p-4 min-h-0 bg-gray-100 print:bg-white print:p-0">
                     <BookingCalendarView
@@ -454,7 +508,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         vehicles={vehicles}
                         customers={customers}
                         onAddJob={(date) => { setDefaultDateForModal(dateStringToDate(date)); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
-                        onDragStart={() => {}} 
+                        onDragStart={() => { }}
                         maxDailyCapacityHours={dailyCapacity}
                         absencesByDate={absencesByDate}
                         onDayClick={(date) => { setCurrentDate(date); setViewMode('timeline'); }}
@@ -464,9 +518,9 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     />
                 </div>
             )}
-            
+
             {viewMode === 'week' && (
-                <WeeklyView 
+                <WeeklyView
                     weekStart={weekStart}
                     onAddJob={(date) => { setDefaultDateForModal(dateStringToDate(date)); setIsSmartCreateOpen(true); setSmartCreateMode('job'); }}
                     onEditJob={handleEditJob}
@@ -476,11 +530,11 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onStartWork={onStartWork}
                     onPause={onPause}
                     onRestart={onRestart}
-                    onQcApprove={() => {}} // Not applicable in this view
+                    onQcApprove={() => { }} // Not applicable in this view
                     onEngineerComplete={onEngineerComplete}
                 />
             )}
-            
+
             {viewMode === 'fcs-gantt' && (
                 <ResourceGanttView
                     jobs={jobs.filter(j => selectedEntityId === 'all' || j.entityId === selectedEntityId)}
@@ -529,10 +583,10 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     onUpdateEngineer={async (engineerId: string, newName: string) => {
                         // 1. Resolve real engineer ID if dummy fallback or virtual
                         const targetEng = (engineers || []).find(e => e.id === engineerId) || (entityEngineers || []).find(e => e.id === engineerId);
-                        
+
                         let actualEngineerId = engineerId;
                         if (engineerId === 'tech_default' || engineerId.startsWith('sim_')) {
-                            const matchingUser = (users || []).find(u => 
+                            const matchingUser = (users || []).find(u =>
                                 (u.name && u.name.trim().toLowerCase() === newName.trim().toLowerCase()) ||
                                 (selectedEntityId !== 'all' && u.preferredEntityId === selectedEntityId && isTechRole(u.role))
                             );
@@ -561,10 +615,10 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         }
 
                         // 2. Also update corresponding user profile in users if exists
-                        const matchingUser = (users || []).find(u => 
-                            u.engineerId === engineerId || 
+                        const matchingUser = (users || []).find(u =>
+                            u.engineerId === engineerId ||
                             u.engineerId === actualEngineerId ||
-                            u.id === engineerId || 
+                            u.id === engineerId ||
                             u.id === actualEngineerId ||
                             (targetEng && targetEng.name && u.name?.trim().toLowerCase() === targetEng.name.trim().toLowerCase()) ||
                             (u.name && u.name.trim().toLowerCase() === newName.trim().toLowerCase()) ||
@@ -597,15 +651,15 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                         }
 
                         // 2. Synchronize user profile
-                        const matchingUser = (users || []).find(u => 
-                            u.engineerId === engineerId || 
-                            u.id === engineerId || 
+                        const matchingUser = (users || []).find(u =>
+                            u.engineerId === engineerId ||
+                            u.id === engineerId ||
                             (targetEng.name && u.name?.trim().toLowerCase() === targetEng.name.trim().toLowerCase())
                         );
                         if (matchingUser && setUsers) {
-                            const updatedUser = { 
-                                ...matchingUser, 
-                                transferredToEntityId: toEntityId || null 
+                            const updatedUser = {
+                                ...matchingUser,
+                                transferredToEntityId: toEntityId || null
                             };
                             setUsers(prev => (prev || []).map(u => u.id === matchingUser.id ? updatedUser : u));
                             await saveDocument('brooks_users', updatedUser);
@@ -613,7 +667,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     }}
                 />
             )}
-            
+
             {isDatePickerOpen && (
                 <DatePickerModal
                     isOpen={isDatePickerOpen}
@@ -625,7 +679,7 @@ const DispatchView: React.FC<DispatchViewProps> = ({
                     absencesByDate={absencesByDate}
                 />
             )}
-            
+
             {assignModalData && (
                 <AssignEngineerModal
                     isOpen={!!assignModalData}
