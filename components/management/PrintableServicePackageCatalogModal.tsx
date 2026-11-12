@@ -514,7 +514,7 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
                                                                         {lines.map((item, lIdx) => {
                                                                             const unitP = item.unitPrice || 0;
                                                                             const qty = item.quantity || 1;
-                                                                            const lineTotal = item.totalPrice ?? (unitP * qty);
+                                                                            const lineTotal = unitP * qty;
 
                                                                             return (
                                                                                 <tr key={item.id || lIdx} className="hover:bg-slate-50/60 transition-colors">
