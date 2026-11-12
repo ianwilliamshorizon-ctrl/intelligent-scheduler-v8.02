@@ -1,8 +1,45 @@
-import React, { useRef, useMemo } from 'react';
+import React, { useRef, useMemo, useState, useEffect } from 'react';
 import { useReactToPrint } from 'react-to-print';
-import { Printer, X, FileText, CheckCircle2, Building2, Wrench, Package as PackageIcon, ShieldCheck } from 'lucide-react';
+import { Printer, X, FileText, Building2, Wrench, Package as PackageIcon, ShieldCheck, Filter, Search, RotateCcw } from 'lucide-react';
 import { ServicePackage, BusinessEntity } from '../../types';
 import { formatCurrency } from '../../utils/formatUtils';
+
+export type PackageTierFilter = 'all' | 'bronze' | 'silver' | 'gold' | 'platinum' | 'standard';
+
+export interface CatalogFilterCriteria {
+    entityId: string;
+    tier: PackageTierFilter;
+    make: string;
+    model: string;
+    keyword: string;
+}
+
+export const detectPackageTier = (pkg: ServicePackage): Exclude<PackageTierFilter, 'all'> => {
+    const text = `${pkg.name || ''} ${pkg.description || ''}`.toLowerCase();
+    if (/\bbronze\b/.test(text)) return 'bronze';
+    if (/\bsilver\b/.test(text)) return 'silver';
+    if (/\bgold\b/.test(text)) return 'gold';
+    if (/\bplatinum\b/.test(text)) return 'platinum';
+    return 'standard';
+};
+
+export const filterServicePackagesForCatalog = (
+    packages: ServicePackage[],
+    criteria: CatalogFilterCriteria
+): ServicePackage[] => {
+    const kw = criteria.keyword.trim().toLowerCase();
+    return (packages || []).filter(pkg => {
+        if (criteria.entityId !== 'all' && pkg.entityId !== criteria.entityId) return false;
+        if (criteria.tier !== 'all' && detectPackageTier(pkg) !== criteria.tier) return false;
+        if (criteria.make !== 'all' && (pkg.applicableMake || '').trim().toLowerCase() !== criteria.make.toLowerCase()) return false;
+        if (criteria.model !== 'all' && (pkg.applicableModel || '').trim().toLowerCase() !== criteria.model.toLowerCase()) return false;
+        if (kw) {
+            const haystack = `${pkg.name || ''} ${pkg.description || ''} ${pkg.applicableMake || ''} ${pkg.applicableModel || ''} ${pkg.applicableVariant || ''}`.toLowerCase();
+            if (!haystack.includes(kw)) return false;
+        }
+        return true;
+    });
+};
 
 interface PrintableServicePackageCatalogModalProps {
     isOpen: boolean;
@@ -10,6 +47,7 @@ interface PrintableServicePackageCatalogModalProps {
     packages: ServicePackage[];
     businessEntities: BusinessEntity[];
     selectedEntityId: string;
+    initialSearchTerm?: string;
 }
 
 export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePackageCatalogModalProps> = ({
@@ -17,21 +55,88 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
     onClose,
     packages,
     businessEntities,
-    selectedEntityId
+    selectedEntityId,
+    initialSearchTerm = ''
 }) => {
     const printComponentRef = useRef<HTMLDivElement>(null);
 
-    const activeEntityName = useMemo(() => {
-        if (selectedEntityId === 'all') return 'All Entities (Brookspeed Group)';
-        const entity = businessEntities.find(e => e.id === selectedEntityId);
-        return entity?.name || 'Selected Entity';
-    }, [selectedEntityId, businessEntities]);
+    // Interactive extract filters
+    const [filterEntityId, setFilterEntityId] = useState<string>(selectedEntityId || 'all');
+    const [filterTier, setFilterTier] = useState<PackageTierFilter>('all');
+    const [filterMake, setFilterMake] = useState<string>('all');
+    const [filterModel, setFilterModel] = useState<string>('all');
+    const [filterKeyword, setFilterKeyword] = useState<string>(initialSearchTerm);
 
-    // Group packages by business entity
+    useEffect(() => {
+        if (isOpen) {
+            setFilterEntityId(selectedEntityId || 'all');
+            setFilterKeyword(initialSearchTerm || '');
+        }
+    }, [isOpen, selectedEntityId, initialSearchTerm]);
+
+    // Extract unique makes & models from packages (scoped by entity / make)
+    const availableMakes = useMemo(() => {
+        const set = new Set<string>();
+        (packages || []).forEach(p => {
+            if (filterEntityId !== 'all' && p.entityId !== filterEntityId) return;
+            const make = (p.applicableMake || '').trim();
+            if (make) set.add(make);
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [packages, filterEntityId]);
+
+    const availableModels = useMemo(() => {
+        const set = new Set<string>();
+        (packages || []).forEach(p => {
+            if (filterEntityId !== 'all' && p.entityId !== filterEntityId) return;
+            if (filterMake !== 'all' && (p.applicableMake || '').trim().toLowerCase() !== filterMake.toLowerCase()) return;
+            const model = (p.applicableModel || '').trim();
+            if (model) set.add(model);
+        });
+        return Array.from(set).sort((a, b) => a.localeCompare(b));
+    }, [packages, filterEntityId, filterMake]);
+
+    const filteredPackages = useMemo(() => {
+        const filtered = filterServicePackagesForCatalog(packages || [], {
+            entityId: filterEntityId,
+            tier: filterTier,
+            make: filterMake,
+            model: filterModel,
+            keyword: filterKeyword
+        });
+        return [...filtered].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    }, [packages, filterEntityId, filterTier, filterMake, filterModel, filterKeyword]);
+
+    const activeEntityName = useMemo(() => {
+        if (filterEntityId === 'all') return 'All Entities (Brookspeed Group)';
+        const entity = businessEntities.find(e => e.id === filterEntityId);
+        return entity?.name || 'Selected Entity';
+    }, [filterEntityId, businessEntities]);
+
+    const activeFilterSummary = useMemo(() => {
+        const parts: string[] = [];
+        if (filterTier !== 'all') parts.push(`${filterTier.charAt(0).toUpperCase() + filterTier.slice(1)} Tier`);
+        if (filterMake !== 'all') parts.push(filterMake);
+        if (filterModel !== 'all') parts.push(filterModel);
+        if (filterKeyword.trim()) parts.push(`"${filterKeyword.trim()}"`);
+        return parts.length > 0 ? parts.join(' • ') : 'All Packages';
+    }, [filterTier, filterMake, filterModel, filterKeyword]);
+
+    const hasActiveFilters = filterEntityId !== 'all' || filterTier !== 'all' || filterMake !== 'all' || filterModel !== 'all' || filterKeyword.trim() !== '';
+
+    const handleResetFilters = () => {
+        setFilterEntityId('all');
+        setFilterTier('all');
+        setFilterMake('all');
+        setFilterModel('all');
+        setFilterKeyword('');
+    };
+
+    // Group filtered packages by business entity
     const groupedPackages = useMemo(() => {
         const groups: { [entityKey: string]: { entity: BusinessEntity | undefined; packages: ServicePackage[] } } = {};
 
-        packages.forEach(pkg => {
+        filteredPackages.forEach(pkg => {
             const entId = pkg.entityId || 'ent_unassigned';
             if (!groups[entId]) {
                 const entObj = businessEntities.find(e => e.id === entId);
@@ -44,15 +149,15 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
         });
 
         return groups;
-    }, [packages, businessEntities]);
+    }, [filteredPackages, businessEntities]);
 
     const totalLineItems = useMemo(() => {
-        return packages.reduce((sum, p) => sum + (p.costItems?.length || 0), 0);
-    }, [packages]);
+        return filteredPackages.reduce((sum, p) => sum + (p.costItems?.length || 0), 0);
+    }, [filteredPackages]);
 
     const handlePrint = useReactToPrint({
         contentRef: printComponentRef,
-        documentTitle: `Brookspeed_Service_Packages_Catalogue_${selectedEntityId}_${new Date().toISOString().split('T')[0]}`
+        documentTitle: `Brookspeed_Service_Packages_${filterEntityId}${filterTier !== 'all' ? `_${filterTier}` : ''}_${new Date().toISOString().split('T')[0]}`
     });
 
     if (!isOpen) return null;
@@ -71,12 +176,14 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
                             <h2 className="text-lg font-bold tracking-tight text-white flex items-center gap-2">
                                 Service Packages Publication
                                 <span className="bg-rose-600 text-white text-xs font-semibold px-2.5 py-0.5 rounded-full">
-                                    {packages.length} {packages.length === 1 ? 'Package' : 'Packages'}
+                                    {filteredPackages.length} {filteredPackages.length === 1 ? 'Package' : 'Packages'}
                                 </span>
                             </h2>
-                            <p className="text-xs text-slate-300 flex items-center gap-2 mt-0.5">
+                            <p className="text-xs text-slate-300 flex flex-wrap items-center gap-2 mt-0.5">
                                 <Building2 size={13} className="text-rose-400" />
-                                <span>Filter Scope: <strong className="text-white">{activeEntityName}</strong></span>
+                                <span>Scope: <strong className="text-white">{activeEntityName}</strong></span>
+                                <span className="text-slate-500">•</span>
+                                <span>{activeFilterSummary}</span>
                                 <span className="text-slate-500">•</span>
                                 <span>{totalLineItems} Operations & Parts</span>
                             </p>
@@ -87,7 +194,8 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
                         <button
                             type="button"
                             onClick={handlePrint}
-                            className="bg-rose-600 hover:bg-rose-700 active:scale-95 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                            disabled={filteredPackages.length === 0}
+                            className="bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 text-white px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
                             title="Print or Save as PDF"
                         >
                             <Printer size={16} />
@@ -101,6 +209,111 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
                         >
                             <X size={20} />
                         </button>
+                    </div>
+                </div>
+
+                {/* Extract Filter Controls Bar (Non-printable) */}
+                <div className="px-4 py-3 bg-slate-800/95 border-b border-slate-700 text-white flex flex-col gap-2.5">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5 mr-1">
+                            <Filter size={13} className="text-rose-400" />
+                            Extract Filters:
+                        </span>
+
+                        {/* Entity Selector */}
+                        <select
+                            value={filterEntityId}
+                            onChange={(e) => {
+                                setFilterEntityId(e.target.value);
+                                setFilterMake('all');
+                                setFilterModel('all');
+                            }}
+                            className="bg-slate-900 border border-slate-600 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            aria-label="Filter by Business Entity"
+                        >
+                            <option value="all">All Entities</option>
+                            {businessEntities.map(ent => (
+                                <option key={ent.id} value={ent.id}>{ent.name}</option>
+                            ))}
+                        </select>
+
+                        {/* Make Selector */}
+                        <select
+                            value={filterMake}
+                            onChange={(e) => {
+                                setFilterMake(e.target.value);
+                                setFilterModel('all');
+                            }}
+                            className="bg-slate-900 border border-slate-600 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            aria-label="Filter by Vehicle Make"
+                        >
+                            <option value="all">All Makes</option>
+                            {availableMakes.map(make => (
+                                <option key={make} value={make}>{make}</option>
+                            ))}
+                        </select>
+
+                        {/* Model Selector */}
+                        <select
+                            value={filterModel}
+                            onChange={(e) => setFilterModel(e.target.value)}
+                            className="bg-slate-900 border border-slate-600 text-white text-xs font-semibold rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-rose-500 max-w-[180px]"
+                            aria-label="Filter by Vehicle Model"
+                        >
+                            <option value="all">All Models</option>
+                            {availableModels.map(model => (
+                                <option key={model} value={model}>{model}</option>
+                            ))}
+                        </select>
+
+                        {/* Keyword Search */}
+                        <div className="relative flex-1 min-w-[180px] max-w-xs">
+                            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                            <input
+                                type="text"
+                                value={filterKeyword}
+                                onChange={(e) => setFilterKeyword(e.target.value)}
+                                placeholder="Search name, model, keyword..."
+                                className="w-full bg-slate-900 border border-slate-600 text-white placeholder-slate-400 text-xs rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                            />
+                        </div>
+
+                        {hasActiveFilters && (
+                            <button
+                                type="button"
+                                onClick={handleResetFilters}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-700 hover:bg-slate-600 text-slate-200 transition cursor-pointer"
+                            >
+                                <RotateCcw size={12} />
+                                <span>Reset</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Tier Quick-Filter Pills */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-semibold text-slate-400 mr-1">Package Tier:</span>
+                        {([
+                            { key: 'all', label: 'All Tiers' },
+                            { key: 'bronze', label: 'Bronze' },
+                            { key: 'silver', label: 'Silver' },
+                            { key: 'gold', label: 'Gold' },
+                            { key: 'platinum', label: 'Platinum' },
+                            { key: 'standard', label: 'Standard / Other' }
+                        ] as { key: PackageTierFilter; label: string }[]).map(({ key, label }) => (
+                            <button
+                                key={key}
+                                type="button"
+                                onClick={() => setFilterTier(key)}
+                                className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition cursor-pointer ${
+                                    filterTier === key
+                                        ? 'bg-rose-600 text-white shadow-xs'
+                                        : 'bg-slate-900/70 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
                     </div>
                 </div>
 
@@ -176,12 +389,12 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
                                     <strong className="text-xs text-slate-800 font-bold block truncate">{activeEntityName}</strong>
                                 </div>
                                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Packages</span>
-                                    <strong className="text-xs text-slate-800 font-bold block">{packages.length} Active Packages</strong>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Selection Filter</span>
+                                    <strong className="text-xs text-slate-800 font-bold block truncate">{activeFilterSummary}</strong>
                                 </div>
                                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
-                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Itemized Operations</span>
-                                    <strong className="text-xs text-slate-800 font-bold block">{totalLineItems} Lines</strong>
+                                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Total Packages</span>
+                                    <strong className="text-xs text-slate-800 font-bold block">{filteredPackages.length} Packages ({totalLineItems} Lines)</strong>
                                 </div>
                                 <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200/80">
                                     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Date Generated</span>
@@ -191,12 +404,12 @@ export const PrintableServicePackageCatalogModal: React.FC<PrintableServicePacka
                         </div>
 
                         {/* Empty state */}
-                        {packages.length === 0 ? (
+                        {filteredPackages.length === 0 ? (
                             <div className="text-center py-16 bg-slate-50 rounded-xl border border-dashed border-slate-300">
                                 <FileText size={40} className="mx-auto text-slate-400 mb-3" />
                                 <h3 className="text-base font-bold text-slate-700">No service packages found</h3>
                                 <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                                    No service packages match the selected entity filter ({activeEntityName}). Select another entity or choose "All Entities".
+                                    No service packages match the selected filters ({activeEntityName} • {activeFilterSummary}). Adjust or reset the extract filters above.
                                 </p>
                             </div>
                         ) : (

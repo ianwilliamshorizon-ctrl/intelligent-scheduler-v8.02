@@ -461,9 +461,10 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                 <PrintableServicePackageCatalogModal
                     isOpen={isCatalogModalOpen}
                     onClose={() => setIsCatalogModalOpen(false)}
-                    packages={filteredAndSortedPackages}
+                    packages={servicePackages || []}
                     businessEntities={businessEntities}
                     selectedEntityId={entityFilter}
+                    initialSearchTerm={searchTerm}
                 />
             )}
         </div>
