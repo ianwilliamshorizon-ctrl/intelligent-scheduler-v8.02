@@ -5,7 +5,8 @@ import { Inquiry, Estimate, Customer, Vehicle, User, PurchaseOrder } from '../ty
 import { 
     Search, PlusCircle, Car, FileText, CalendarCheck, UserCheck, 
     Package as PackageIcon, ArrowRightCircle, CheckCircle2, Play, AlertTriangle, Camera,
-    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin, Calendar, Archive, Printer
+    ChevronDown, ChevronUp, RefreshCw, Loader2, Copy, Wand2, MapPin, Calendar, Archive, Printer,
+    Mail, Send, X
 } from 'lucide-react';
 import { getCustomerDisplayName } from '../core/utils/customerUtils';
 import ConfirmationModal from './ConfirmationModal';
@@ -15,7 +16,7 @@ import { InquiryMergeModal } from './inquiries/InquiryMergeModal';
 import { saveDocument, deleteDocument } from '../core/db';
 import { getImage } from '../utils/imageStore';
 import { toast } from 'react-toastify';
-import { triggerEmailSync } from '../core/services/emailService';
+import { triggerEmailSync, sendOutboundEmail } from '../core/services/emailService';
 import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../core/services/firebaseServices';
 import { extractUKRegistration, getCleanInquirySnippet, CANONICAL_KANBAN_STAGES, normalizeInquiryKanbanStage, isOnlineApprovedInquiry, CanonicalKanbanStage } from '../core/utils/inquiryUtils';
@@ -119,7 +120,10 @@ const InquiryCard: React.FC<{
     onMouseEnter?: () => void;
     isSelected?: boolean;
     onToggleSelect?: (id: string, e: React.MouseEvent) => void;
-}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, onViewCustomer, onViewVehicle, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter, isSelected = false, onToggleSelect }) => {
+    onRunAgent?: (inquiry: Inquiry) => void;
+    isRunningAgent?: boolean;
+    onQuickReply?: (inquiry: Inquiry, mode: 'ai_draft' | 'chase_72h', targetEmail: string) => void;
+}> = ({ inquiry, onOpenInquiryModal, onInitiateMerge, onInitiateBooking, onViewEstimate, onOpenPurchaseOrder, onViewCustomer, onViewVehicle, isCompact, onUpdateStatus, onConvert, draggable, isExpanded = false, onMouseEnter, isSelected = false, onToggleSelect, onRunAgent, isRunningAgent = false, onQuickReply }) => {
     const { customers, vehicles, estimates, purchaseOrders, jobs } = useData();
     const { users, businessEntities: entities } = useApp();
     
@@ -555,11 +559,45 @@ const InquiryCard: React.FC<{
 
                 {/* Fast Action Buttons */}
                 {onUpdateStatus && (
-                    <div className={`${isExpanded ? 'flex' : 'hidden'} justify-end gap-1 mt-1 pt-1 border-t border-gray-100/50`} onClick={(e) => e.stopPropagation()}>
+                    <div className={`${isExpanded ? 'flex' : 'hidden'} flex-wrap justify-end gap-1 mt-1 pt-1 border-t border-gray-100/50`} onClick={(e) => e.stopPropagation()}>
+                        {onRunAgent && (
+                            <button
+                                type="button"
+                                title="Run Concierge Agent"
+                                disabled={isRunningAgent}
+                                onClick={() => onRunAgent(inquiry)}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-[9px] font-bold transition disabled:opacity-50"
+                            >
+                                {isRunningAgent ? <Loader2 size={9} className="animate-spin" /> : <Wand2 size={9} />}
+                                <span>Agent</span>
+                            </button>
+                        )}
+                        {displayEmail && onQuickReply && (inquiry.agentPlan?.draftReply || isStale72h(inquiry) || inquiry.hasNewReply) && (
+                            <button
+                                type="button"
+                                title={isStale72h(inquiry) ? "Send 72h Follow-up & Move to Waiting" : "Review & Send AI Reply"}
+                                onClick={() => onQuickReply(inquiry, isStale72h(inquiry) ? 'chase_72h' : 'ai_draft', displayEmail)}
+                                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[9px] font-bold transition ${isStale72h(inquiry) ? 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200'}`}
+                            >
+                                <Mail size={9} />
+                                <span>{isStale72h(inquiry) ? 'Chase 72h' : 'Send AI Reply'}</span>
+                            </button>
+                        )}
+                        {isOnlineApprovedInquiry(inquiry, estimate) && estimate && !job && (
+                            <button
+                                type="button"
+                                title="Book Approved Estimate into Workshop"
+                                onClick={() => onInitiateBooking(estimate, inquiry.id)}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-emerald-600 text-white hover:bg-emerald-700 text-[9px] font-bold transition"
+                            >
+                                <CalendarCheck size={9} />
+                                <span>Book Bay</span>
+                            </button>
+                        )}
                         {(!estimate && onConvert) && (
                             <button
                                 type="button"
-                                title="Link Estimate"
+                                title="Create / Link Estimate"
                                 onClick={() => onConvert(inquiry, 'estimate')}
                                 className="p-0.5 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 transition"
                             >
@@ -917,7 +955,30 @@ const InquiryCard: React.FC<{
 
             {/* Fast Action Buttons */}
             {onUpdateStatus && (
-                <div className="flex justify-end gap-1.5 mt-2 pt-2 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                <div className="flex flex-wrap justify-end gap-1.5 mt-2 pt-2 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
+                    {onRunAgent && (
+                        <button
+                            type="button"
+                            title="Run Concierge Agent"
+                            disabled={isRunningAgent}
+                            onClick={() => onRunAgent(inquiry)}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200 text-xs font-bold transition disabled:opacity-50"
+                        >
+                            {isRunningAgent ? <Loader2 size={12} className="animate-spin" /> : <Wand2 size={12} />}
+                            <span>Agent</span>
+                        </button>
+                    )}
+                    {displayEmail && onQuickReply && (inquiry.agentPlan?.draftReply || isStale72h(inquiry) || inquiry.hasNewReply) && (
+                        <button
+                            type="button"
+                            title={isStale72h(inquiry) ? "Send 72h Follow-up & Move to Waiting" : "Review & Send AI Reply"}
+                            onClick={() => onQuickReply(inquiry, isStale72h(inquiry) ? 'chase_72h' : 'ai_draft', displayEmail)}
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-xs font-bold transition ${isStale72h(inquiry) ? 'bg-red-50 text-red-700 hover:bg-red-100 border-red-200' : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200'}`}
+                        >
+                            <Mail size={12} />
+                            <span>{isStale72h(inquiry) ? 'Chase 72h' : 'Send AI Reply'}</span>
+                        </button>
+                    )}
                     {(!estimate && onConvert) && (
                         <button
                             type="button"
@@ -963,7 +1024,7 @@ const InquiryCard: React.FC<{
 };
 
 const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
-    const { inquiries, setInquiries, customers, vehicles, estimates, setEstimates, purchaseOrders, jobs, forceRefresh } = useData();
+    const { inquiries, setInquiries, customers, vehicles, estimates, setEstimates, purchaseOrders, jobs, servicePackages, forceRefresh } = useData();
     
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
@@ -1320,6 +1381,108 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
     const [printFilterMode, setPrintFilterMode] = useState<'all' | 'scheduled'>('all');
     const [showMergeModal, setShowMergeModal] = useState(false);
+    const [runningAgentId, setRunningAgentId] = useState<string | null>(null);
+    const [quickReplyModal, setQuickReplyModal] = useState<{
+        inquiry: Inquiry;
+        to: string;
+        subject: string;
+        body: string;
+        isSending: boolean;
+    } | null>(null);
+
+    const handleRunConciergeAgent = async (inquiry: Inquiry) => {
+        setRunningAgentId(inquiry.id);
+        try {
+            const linkedEstimate = (inquiry.linkedEstimateId ? estimates.find(e => e.id === inquiry.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === inquiry.id);
+            const linkedJob = inquiry.linkedJobId ? jobs.find(j => j.id === inquiry.linkedJobId) : null;
+            const entityPackages = (servicePackages || [])
+                .filter(p => !inquiry.entityId || p.entityId === inquiry.entityId)
+                .map(p => p.name)
+                .filter(Boolean);
+
+            const { generateInquiryAgentPlan } = await import('../core/services/geminiService');
+            const plan = await generateInquiryAgentPlan(inquiry, {
+                availablePackageNames: entityPackages,
+                hasCustomer: Boolean(inquiry.linkedCustomerId),
+                hasVehicle: Boolean(inquiry.linkedVehicleId || inquiry.vehicleRegistration),
+                estimateStatus: linkedEstimate?.status,
+                jobStatus: linkedJob?.status
+            });
+
+            const updated: Inquiry = {
+                ...inquiry,
+                agentPlan: plan,
+                aiNextStepSuggestion: plan.recommendedActionLabel,
+                vehicleRegistration: inquiry.vehicleRegistration || plan.extractedVrm || undefined
+            };
+            setInquiries(prev => prev.map(i => i.id === inquiry.id ? updated : i));
+            await saveDocument('brooks_inquiries', updated);
+            toast.success('Concierge Agent updated plan');
+        } catch (err: any) {
+            console.error('Failed to run Concierge Agent:', err);
+            toast.error(err?.message || 'Failed to run Concierge Agent');
+        } finally {
+            setRunningAgentId(null);
+        }
+    };
+
+    const handleOpenQuickReply = (inquiry: Inquiry, mode: 'ai_draft' | 'chase_72h', targetEmail: string) => {
+        const refNum = inquiry.inquiryNumber || inquiry.id;
+        const firstName = (inquiry.fromName || 'Customer').split(' ')[0];
+        const defaultChase = `Hi ${firstName},\n\nJust following up on your recent inquiry${inquiry.vehicleRegistration ? ` regarding ${inquiry.vehicleRegistration}` : ''} to see if you had any questions or would like us to get this booked in for you.\n\nKind regards,\nBrookspeed`;
+        setQuickReplyModal({
+            inquiry,
+            to: targetEmail,
+            subject: `Re: Your Inquiry [${refNum}]`,
+            body: mode === 'chase_72h'
+                ? (inquiry.agentPlan?.draftReply || defaultChase)
+                : (inquiry.agentPlan?.draftReply || ''),
+            isSending: false
+        });
+    };
+
+    const handleSendQuickReply = async () => {
+        if (!quickReplyModal || !quickReplyModal.body.trim()) return;
+        const { inquiry, to, subject, body } = quickReplyModal;
+        setQuickReplyModal(prev => prev ? { ...prev, isSending: true } : null);
+        try {
+            const success = await sendOutboundEmail({
+                to,
+                fromName: 'Brookspeed',
+                fromEmail: 'info@brookspeed.com',
+                subject,
+                body
+            });
+            if (!success) {
+                toast.error('Failed to send email.');
+                setQuickReplyModal(prev => prev ? { ...prev, isSending: false } : null);
+                return;
+            }
+            const newLog = {
+                id: crypto.randomUUID(),
+                timestamp: new Date().toISOString(),
+                userId: currentUser.id,
+                actionType: 'Email Sent',
+                notes: `To: ${to}\n\n${body}`
+            };
+            const updated: Inquiry = {
+                ...inquiry,
+                status: 'Waiting on Customer',
+                actionStatus: 'Email Sent',
+                hasNewReply: false,
+                followUpDate: undefined,
+                logs: [...(inquiry.logs || []), newLog]
+            };
+            setInquiries(prev => prev.map(i => i.id === inquiry.id ? updated : i));
+            await saveDocument('brooks_inquiries', updated);
+            setQuickReplyModal(null);
+            toast.success('Reply sent & moved to Waiting on Customer');
+        } catch (err: any) {
+            console.error('Quick reply failed:', err);
+            toast.error(err?.message || 'Failed to send email');
+            setQuickReplyModal(prev => prev ? { ...prev, isSending: false } : null);
+        }
+    };
 
     const handleSyncEmails = async () => {
         setIsSyncing(true);
@@ -2401,6 +2564,9 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                             draggable={true}
                                             isExpanded={hoveredInquiryId === i.id}
                                             onMouseEnter={() => setHoveredInquiryId(i.id)}
+                                            onRunAgent={handleRunConciergeAgent}
+                                            isRunningAgent={runningAgentId === i.id}
+                                            onQuickReply={handleOpenQuickReply}
                                         />
                                     ))}
                                 </div>
@@ -2531,6 +2697,68 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 className="px-4 py-2 bg-red-600 text-white rounded font-medium shadow-sm hover:bg-red-700"
                             >
                                 Close Inquiry
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {quickReplyModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => !quickReplyModal.isSending && setQuickReplyModal(null)}>
+                    <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-between border-b pb-2">
+                            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-1.5">
+                                <Wand2 size={15} className="text-purple-600" />
+                                Quick Send AI Reply & Move to Waiting
+                            </h3>
+                            <button
+                                type="button"
+                                disabled={quickReplyModal.isSending}
+                                onClick={() => setQuickReplyModal(null)}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                        <div className="text-xs text-gray-600">
+                            <span className="font-bold">To:</span> {quickReplyModal.to}
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Subject</label>
+                            <input
+                                type="text"
+                                value={quickReplyModal.subject}
+                                onChange={(e) => setQuickReplyModal(prev => prev ? { ...prev, subject: e.target.value } : null)}
+                                className="w-full p-2 border border-gray-300 rounded text-xs"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[11px] font-bold text-gray-700 mb-1">Reply Body</label>
+                            <textarea
+                                rows={8}
+                                value={quickReplyModal.body}
+                                onChange={(e) => setQuickReplyModal(prev => prev ? { ...prev, body: e.target.value } : null)}
+                                className="w-full p-2 border border-gray-300 rounded text-xs"
+                                placeholder="Edit the AI-drafted reply before sending..."
+                            />
+                        </div>
+                        <div className="flex justify-end gap-2 pt-2 border-t">
+                            <button
+                                type="button"
+                                disabled={quickReplyModal.isSending}
+                                onClick={() => setQuickReplyModal(null)}
+                                className="px-3 py-1.5 border rounded text-xs font-semibold text-gray-600 hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                disabled={quickReplyModal.isSending || !quickReplyModal.body.trim()}
+                                onClick={handleSendQuickReply}
+                                className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs font-bold shadow-sm disabled:opacity-50"
+                            >
+                                {quickReplyModal.isSending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                                <span>Send & Move to Waiting</span>
                             </button>
                         </div>
                     </div>
