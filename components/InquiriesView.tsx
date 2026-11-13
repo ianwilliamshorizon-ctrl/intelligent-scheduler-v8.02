@@ -2247,9 +2247,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Status */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap">
                                                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                                                        i.status === 'Triage' || i.status === 'Inbox' || i.status === 'New Requests' ? 'bg-sky-50 text-sky-700 border-sky-200' :
+                                                        i.status === 'Triage' ? 'bg-sky-50 text-sky-700 border-sky-200' :
                                                         i.status === 'Our Action' ? 'bg-orange-50 text-orange-700 border-orange-200' :
-                                                        i.status === 'Online Approved' ? 'bg-green-50 text-green-700 border-green-200' :
                                                         i.status === 'Scheduled' ? 'bg-purple-100 text-purple-800 border-purple-300' :
                                                         i.status === 'Waiting on Customer' ? (isStale72h(i) ? 'bg-red-50 text-red-800 border-red-500 ring-1 ring-red-400' : 'bg-purple-50 text-purple-700 border-purple-200') :
                                                         'bg-gray-100 text-gray-800 border-gray-300'

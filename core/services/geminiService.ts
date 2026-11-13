@@ -252,8 +252,6 @@ Write a short, friendly, and professional paragraph (3-4 sentences max) summariz
     }
 };
 
-import { Inquiry } from '../../types';
-
 /**
  * GENERATE NEXT STEP SUGGESTION
  * Uses AI to suggest the next best action for a CRM inquiry based on its status and history.
