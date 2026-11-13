@@ -24,7 +24,8 @@ import {
   Eye,
   ExternalLink,
   ChevronRight,
-  ArrowRight
+  ArrowRight,
+  Mail
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -34,7 +35,7 @@ interface HelpCentreProps {
   onClose: () => void;
 }
 
-type HelpTab = 'first-time-user' | 'fcs' | 'estimates' | 'workflow' | 'inventory' | 'invoicing' | 'directors' | 'mobile';
+type HelpTab = 'first-time-user' | 'inquiries' | 'fcs' | 'estimates' | 'workflow' | 'inventory' | 'invoicing' | 'directors' | 'mobile';
 type ViewMode = 'visual' | 'sop';
 
 export interface StepExample {
@@ -165,6 +166,36 @@ const HELP_SECTIONS: HelpSection[] = [
       'Tip: Use Ctrl+K or the global top search bar to instantly find any customer, vehicle registration (VRM), or part number. If you get stuck anywhere, tap "Request Remote Help" in the bottom-right for instant interactive guidance!'
   },
   {
+    id: 'inquiries',
+    title: 'Inbound Inquiries, 4-Stage Kanban & Concierge Agent',
+    subtitle: 'Outcome-Based Funnel, AI Action Plans & 1-Click Card Execution',
+    badge: 'CONCIERGE AGENT',
+    badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/40',
+    icon: Mail,
+    description:
+      'Streamlined 4-stage Kanban funnel (Triage, Our Action, Waiting on Customer, Scheduled) powered by the Intake-to-Bay Concierge Agent for instant vehicle extraction, service package matching, and 1-click reply or booking execution.',
+    steps: [
+      {
+        title: '1. 4-Stage Outcome-Based Kanban Funnel',
+        desc: 'All inquiries route into four ownership columns: Triage (unreviewed/new leads), Our Action (ball in Brookspeed\'s court), Waiting on Customer (quote/email sent, flagging 72h+ stale quotes in red), and Scheduled (booked in bay; auto-closes when the linked job is Invoiced or Cancelled). Online Approved estimates and Customer Replied cards automatically float to the top of Our Action.'
+      },
+      {
+        title: '2. Run Concierge Agent for Structured Action Plans',
+        desc: 'Click the "Agent" button on any Kanban card (or save an inquiry) to generate a structured Concierge Agent Plan: intent classification, extracted VRM/vehicle details, matched Service Packages from your catalog, next-step recommendation, and a pre-drafted customer reply.'
+      },
+      {
+        title: '3. 1-Click Card Execution (Send AI Reply, Chase 72h & Book Bay)',
+        desc: 'Use "Send AI Reply" (or "Chase 72h" on stale quotes) directly from the card to review the pre-drafted email and click "Send & Move to Waiting" — logging the email and moving the card to Waiting on Customer automatically. On Approved cards, click the green "Book Bay" button to schedule directly.'
+      },
+      {
+        title: '4. Email Sync, Duplicate Merging & Printable Reports',
+        desc: 'Sync inbound emails, merge duplicate threads using the Duplicate Finder, and export filtered Active or Scheduled inquiry lists for daily workshop briefings.'
+      }
+    ],
+    proTip:
+      'Tip: You rarely need to drag cards manually — sending a quick reply automatically moves the card to Waiting on Customer, a customer reply bounces it back to Our Action, and booking the job moves it to Scheduled.'
+  },
+  {
     id: 'fcs',
     title: 'FCS Dynamic Dispatch & Scheduling Matrix',
     subtitle: 'Auto-Allocation, Capacity Leveling & Multi-Bay Gantt Planner',
@@ -187,8 +218,8 @@ const HELP_SECTIONS: HelpSection[] = [
         desc: 'Use the Technician Transfer modal to quickly reallocate work when a mechanic is absent, or drag job cards across bays with instant conflict detection.'
       },
       {
-        title: '4. Print Daily FCS Schedule Sheet',
-        desc: 'Press "Print FCS Schedule" to generate a zero-overlap, high-contrast daily job allocation manifest for workshop floor supervisors.'
+        title: '4. Print Daily FCS Schedule Sheet & Exception Audit',
+        desc: 'Press "Print FCS Schedule" to generate a zero-overlap daily allocation manifest. The Dispatcher Exception check highlights overdue unassigned jobs (scheduled date in the past) that need triage and rollover to the next working day.'
       }
     ],
     proTip:
@@ -209,8 +240,8 @@ const HELP_SECTIONS: HelpSection[] = [
         desc: 'Click "Create Estimate" or import directly from an inbound customer enquiry. Enter the vehicle VRM to pull vehicle make, model, and engine specs.'
       },
       {
-        title: '2. Add Labor Hours & Live Inventory Parts',
-        desc: 'Select standard service labor packages or custom hourly repair lines. Attach OE parts directly from inventory with automated cost markup calculations.'
+        title: '2. Add Labor Hours, Live Parts & Service Package PDF Catalog',
+        desc: 'Select standard service labor packages or custom hourly repair lines, and attach OE parts from inventory. From Service Packages Management, use the Printable Service Package Catalog modal to filter by Entity/Brand (e.g. Brookspeed Porsche) and tier (e.g. Bronze) and export a formatted PDF.'
       },
       {
         title: '3. Transmit Estimate for Customer Sign-Off',
@@ -363,8 +394,8 @@ const HELP_SECTIONS: HelpSection[] = [
         desc: 'Tap "Start Job" to initiate the real-time labor stopwatch. Live timer data streams directly back to the dispatcher screen.'
       },
       {
-        title: '3. Complete Digital Inspections',
-        desc: 'Execute tyre tread depth checks (OSF, NSF, OSR, NSR), brake wear audits, and attach vehicle defect photos directly from tablet camera.'
+        title: '3. Complete Digital & Guided Voice Inspections',
+        desc: 'Execute tyre tread depth checks (OSF, NSF, OSR, NSR), brake wear audits, and defect photos from tablet camera. Use the mobile-optimized Guided Voice Inspection mode for hands-free spoken prompts, cached fast audio, and voice commands ("OK", "Attention", "Urgent", "N/A", "Next", "Back", "Repeat", "Pause").'
       },
       {
         title: '4. Digital Touch Signature Sign-Off',
