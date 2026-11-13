@@ -18,7 +18,7 @@ import { toast } from 'react-toastify';
 import { triggerEmailSync } from '../core/services/emailService';
 import { doc, onSnapshot, updateDoc, deleteDoc } from 'firebase/firestore';
 import { db } from '../core/services/firebaseServices';
-import { extractUKRegistration, getCleanInquirySnippet } from '../core/utils/inquiryUtils';
+import { extractUKRegistration, getCleanInquirySnippet, CANONICAL_KANBAN_STAGES, normalizeInquiryKanbanStage, isOnlineApprovedInquiry, CanonicalKanbanStage } from '../core/utils/inquiryUtils';
 import { getEffectiveJobScheduledDate, getEffectiveInquiryScheduledDate } from '../core/utils/dateUtils';
 
 interface InquiriesViewProps {
@@ -264,12 +264,11 @@ const InquiryCard: React.FC<{
                 onMouseEnter={onMouseEnter}
                 className={`${healthBgClass} rounded shadow-sm p-1.5 border-l-4 ${
                     inquiry.isUrgent ? 'border-red-600' :
-                    inquiry.status === 'Inbox' ? 'border-gray-400' : 
-                    inquiry.status === 'New Requests' ? 'border-blue-400' : 
+                    isOnlineApprovedInquiry(inquiry, estimate) ? 'border-emerald-500' :
+                    inquiry.status === 'Triage' || inquiry.status === 'Inbox' || inquiry.status === 'New Requests' ? 'border-sky-400' : 
                     inquiry.status === 'Our Action' ? 'border-amber-400' : 
-                    inquiry.status === 'Online Approved' ? 'border-green-400' :
                     inquiry.status === 'Scheduled' || isScheduledJob ? 'border-purple-600' : 
-                    inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
+                    inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-300') : 
                     'border-gray-200'
                 } ${isSelected ? 'ring-2 ring-indigo-500 bg-indigo-50/50 shadow-md' : isExpanded ? 'shadow-md ring-1 ring-indigo-400' : ringClass} cursor-pointer transition-all mb-1.5`}
                 onClick={() => onOpenInquiryModal(inquiry)}
@@ -366,18 +365,43 @@ const InquiryCard: React.FC<{
                     </span>
                 </div>
                 
-                {inquiry.actionStatus && (
-                    <div className="mt-0.5 mb-0.5">
-                        <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
-                            {inquiry.actionStatus}
-                        </span>
+                {(isOnlineApprovedInquiry(inquiry, estimate) || inquiry.hasNewReply || inquiry.actionStatus) && (
+                    <div className="mt-0.5 mb-0.5 flex flex-wrap gap-1">
+                        {isOnlineApprovedInquiry(inquiry, estimate) && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                                <CheckCircle2 size={9} /> Approved — Ready to Book
+                            </span>
+                        )}
+                        {inquiry.hasNewReply && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                                Customer Replied
+                            </span>
+                        )}
+                        {inquiry.actionStatus && !isOnlineApprovedInquiry(inquiry, estimate) && (
+                            <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
+                                {inquiry.actionStatus}
+                            </span>
+                        )}
                     </div>
                 )}
                 
-                {inquiry.aiNextStepSuggestion && (
-                    <div className="mt-0.5 mb-0.5 flex items-start gap-1 p-1 bg-purple-50/80 border border-purple-200 rounded text-[9px] text-purple-800">
-                        <Wand2 size={10} className="shrink-0 mt-0.5 text-purple-600" />
-                        <span className="leading-tight font-medium">AI: {inquiry.aiNextStepSuggestion}</span>
+                {(inquiry.agentPlan || inquiry.aiNextStepSuggestion) && (
+                    <div className="mt-0.5 mb-0.5 p-1 bg-purple-50/90 border border-purple-200 rounded text-[9px] text-purple-900 space-y-0.5">
+                        <div className="flex items-start gap-1">
+                            <Wand2 size={10} className="shrink-0 mt-0.5 text-purple-600" />
+                            <span className="leading-tight font-semibold">
+                                {inquiry.agentPlan?.recommendedActionLabel || `AI: ${inquiry.aiNextStepSuggestion}`}
+                            </span>
+                        </div>
+                        {isExpanded && inquiry.agentPlan?.suggestedPackageNames && inquiry.agentPlan.suggestedPackageNames.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pl-3.5">
+                                {inquiry.agentPlan.suggestedPackageNames.map((pkg, idx) => (
+                                    <span key={idx} className="px-1 py-0.2 bg-white border border-purple-200 rounded text-[8px] font-bold text-purple-700">
+                                        {pkg}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
                 
@@ -577,12 +601,11 @@ const InquiryCard: React.FC<{
             }}
             className={`${healthBgClass} rounded-lg shadow-sm p-4 border-l-4 ${
                 inquiry.isUrgent ? 'border-red-600' :
-                inquiry.status === 'Inbox' ? 'border-gray-400' : 
-                inquiry.status === 'New Requests' ? 'border-blue-400' : 
+                isOnlineApprovedInquiry(inquiry, estimate) ? 'border-emerald-500' :
+                inquiry.status === 'Triage' || inquiry.status === 'Inbox' || inquiry.status === 'New Requests' ? 'border-sky-400' : 
                 inquiry.status === 'Our Action' ? 'border-amber-400' : 
-                inquiry.status === 'Online Approved' ? 'border-green-400' :
                 inquiry.status === 'Scheduled' || isScheduledJob ? 'border-purple-600' : 
-                inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-200') : 
+                inquiry.status === 'Waiting on Customer' ? (isStale72h(inquiry) ? 'border-red-500 text-red-800' : 'border-gray-300') : 
                 'border-gray-200'
             } ${isSelected ? 'ring-2 ring-indigo-500 bg-indigo-50/50 shadow-md' : ringClass} cursor-pointer transition-all mb-3 relative`}
             onClick={() => onOpenInquiryModal(inquiry)}
@@ -674,18 +697,43 @@ const InquiryCard: React.FC<{
                 </p>
             )}
 
-            {inquiry.actionStatus && (
-                <div className="mt-2 mb-1">
-                    <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
-                        {inquiry.actionStatus}
-                    </span>
+            {(isOnlineApprovedInquiry(inquiry, estimate) || inquiry.hasNewReply || inquiry.actionStatus) && (
+                <div className="mt-2 mb-1 flex flex-wrap gap-1.5">
+                    {isOnlineApprovedInquiry(inquiry, estimate) && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                            <CheckCircle2 size={12} /> Approved — Ready to Book
+                        </span>
+                    )}
+                    {inquiry.hasNewReply && (
+                        <span className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-bold bg-blue-100 text-blue-800 border border-blue-300">
+                            Customer Replied
+                        </span>
+                    )}
+                    {inquiry.actionStatus && !isOnlineApprovedInquiry(inquiry, estimate) && (
+                        <span className={`inline-block px-2 py-1 rounded text-xs font-bold border ${getActionStatusStyles(inquiry.actionStatus)}`}>
+                            {inquiry.actionStatus}
+                        </span>
+                    )}
                 </div>
             )}
 
-            {inquiry.aiNextStepSuggestion && (
-                <div className="mt-2 mb-1 flex items-start gap-1.5 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-800 shadow-sm">
-                    <Wand2 size={14} className="shrink-0 mt-0.5 text-purple-600" />
-                    <span className="leading-snug font-medium"><strong>AI Next Step:</strong> {inquiry.aiNextStepSuggestion}</span>
+            {(inquiry.agentPlan || inquiry.aiNextStepSuggestion) && (
+                <div className="mt-2 mb-1 p-2 bg-purple-50 border border-purple-200 rounded text-xs text-purple-900 shadow-sm space-y-1">
+                    <div className="flex items-start gap-1.5">
+                        <Wand2 size={14} className="shrink-0 mt-0.5 text-purple-600" />
+                        <span className="leading-snug font-medium">
+                            <strong>Concierge Agent:</strong> {inquiry.agentPlan?.recommendedActionLabel || inquiry.aiNextStepSuggestion}
+                        </span>
+                    </div>
+                    {inquiry.agentPlan?.suggestedPackageNames && inquiry.agentPlan.suggestedPackageNames.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pl-5">
+                            {inquiry.agentPlan.suggestedPackageNames.map((pkg, idx) => (
+                                <span key={idx} className="px-1.5 py-0.5 bg-white border border-purple-200 rounded text-[10px] font-bold text-purple-700">
+                                    {pkg}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
             
@@ -919,42 +967,24 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     
     const normalizedInquiries = useMemo(() => {
         return (inquiries || []).map(i => {
-            let status = i.status;
-
-            // Check if inquiry or linked customer has "brookspeed" in name or email
             const linkedCustomer = i.linkedCustomerId ? customers.find(c => c.id === i.linkedCustomerId) : null;
-            const hasBrookspeedName = 
-                (i.fromName || '').toLowerCase().includes('brookspeed') ||
-                (i.fromEmail || '').toLowerCase().includes('brookspeed') ||
-                (linkedCustomer?.forename || '').toLowerCase().includes('brookspeed') ||
-                (linkedCustomer?.surname || '').toLowerCase().includes('brookspeed');
+            const linkedEstimate = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id);
+            const linkedJob = i.linkedJobId
+                ? jobs.find(j => j.id === i.linkedJobId)
+                : (jobs.find(j => (j as any).associatedInquiryId === i.id)
+                    || (linkedEstimate?.jobId ? jobs.find(j => j.id === linkedEstimate.jobId) : null)
+                    || (linkedEstimate ? jobs.find(j => j.estimateId === linkedEstimate.id) : null)
+                    || (i.linkedEstimateId ? jobs.find(j => j.estimateId === i.linkedEstimateId) : null));
 
-            // Map legacy statuses to new 5-stage funnel for safety
-            if (status === ('New' as any)) status = 'Inbox';
-            if (status === ('Immediate Quote' as any)) status = 'New Requests';
-            if (status === ('Escalated/Urgent' as any) || status === ('Rejected' as any) || status === ('Customer Responded' as any)) status = 'Our Action';
-            if (status === ('Approved' as any)) status = 'Online Approved';
-            if (status === ('Quoted or Responded' as any) || status === ('Sent' as any) || status === ('Quoted' as any)) status = 'Waiting on Customer';
-            if (status === ('In Progress' as any)) status = 'Scheduled';
-
-            // Inbound inquiries with "brookspeed" in forename, surname, fromName, or email belong in New Requests ("New Inquiry")
-            if (hasBrookspeedName && status === 'Waiting on Customer') {
-                status = 'New Requests';
-            }
-            
-            // Auto-bounce to Our Action if they reply
-            if (status === 'Waiting on Customer' && i.hasNewReply) {
-                status = 'Our Action';
-            }
+            const status = normalizeInquiryKanbanStage(i, linkedEstimate, linkedJob, linkedCustomer);
 
             // Effective Entity ID resolution:
             // Inquiry's own entityId or assignedToEntityId takes precedence; fallback to linked estimate's entityId if unset
-            const linkedEstimate = (i.linkedEstimateId ? estimates.find(e => e.id === i.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === i.id);
             const entityId = i.entityId || i.assignedToEntityId || linkedEstimate?.entityId || 'ent_porsche';
 
             return { ...i, status, entityId };
         });
-    }, [inquiries, customers, estimates]);
+    }, [inquiries, customers, estimates, jobs]);
 
     const { selectedEntityId, users, currentUser, businessEntities: entities, setCurrentView } = useApp();
 
@@ -1243,13 +1273,25 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
         try {
             await saveDocument('brooks_inquiries', updated);
             
-            // TRIGGER AI NEXT STEP SUGGESTION
-            import('../core/services/geminiService').then(({ generateNextStepSuggestion }) => {
-                generateNextStepSuggestion(updated).then(suggestion => {
-                    const finalUpdated = { ...updated, aiNextStepSuggestion: suggestion };
+            // TRIGGER CONCIERGE AGENT PLAN (updates structured agentPlan + aiNextStepSuggestion)
+            const linkedEstimate = (updated.linkedEstimateId ? estimates.find(e => e.id === updated.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === updated.id);
+            const linkedJob = updated.linkedJobId ? jobs.find(j => j.id === updated.linkedJobId) : null;
+            import('../core/services/geminiService').then(({ generateInquiryAgentPlan }) => {
+                generateInquiryAgentPlan(updated, {
+                    hasCustomer: Boolean(updated.linkedCustomerId),
+                    hasVehicle: Boolean(updated.linkedVehicleId || updated.vehicleRegistration),
+                    estimateStatus: linkedEstimate?.status,
+                    jobStatus: linkedJob?.status
+                }).then(plan => {
+                    const finalUpdated: Inquiry = {
+                        ...updated,
+                        agentPlan: plan,
+                        aiNextStepSuggestion: plan.recommendedActionLabel,
+                        vehicleRegistration: updated.vehicleRegistration || plan.extractedVrm || undefined
+                    };
                     setInquiries(prev => prev.map(i => i.id === updated.id ? finalUpdated : i));
-                    saveDocument('brooks_inquiries', finalUpdated).catch(err => console.error("Failed to save AI suggestion:", err));
-                }).catch(err => console.error("Failed to generate AI next step suggestion:", err));
+                    saveDocument('brooks_inquiries', finalUpdated).catch(err => console.error("Failed to save AI agent plan:", err));
+                }).catch(err => console.error("Failed to generate AI agent plan:", err));
             });
 
             if (newStatus === 'Closed') {
@@ -1553,39 +1595,30 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
     }, [normalizedInquiries, selectedEntityId, searchTerm, dateFilter, assignedUserFilter, healthFilter, currentUser.id, vehicles, estimates, customers]);
 
     const activeInquiries = useMemo(() => {
-        const columns: { [key in Inquiry['status']]?: Inquiry[] } = {
-            'Inbox': [],
-            'New Requests': [],
+        const columns: { [key in CanonicalKanbanStage]: Inquiry[] } = {
+            'Triage': [],
             'Our Action': [],
             'Waiting on Customer': [],
-            'Online Approved': [],
             'Scheduled': []
         };
         filteredInquiries.forEach(i => {
-            const rawStatus = (i.status || '').trim();
-            const lowerStatus = rawStatus.toLowerCase();
-            
-            // Skip closed/archived entirely so they never show on the active Kanban board
-            if (lowerStatus === 'closed' || lowerStatus === 'archived') {
-                return; 
-            }
-            
-            // Find the proper cased key if it exists, otherwise default to Inbox
-            let properKey = Object.keys(columns).find(k => k.toLowerCase() === lowerStatus) as Inquiry['status'] | undefined;
-            
-            // Customer replies or customer responses belong in 'Our Action'
-            if (lowerStatus === 'customer responded' || lowerStatus === 'responded' || (lowerStatus === 'waiting on customer' && i.hasNewReply)) {
-                properKey = 'Our Action';
-            }
-            
-            if (properKey && columns[properKey]) {
-                columns[properKey]!.push(i);
-            } else {
-                columns['Inbox']!.push(i);
-            }
+            if (i.status === 'Closed') return;
+            const stage = (CANONICAL_KANBAN_STAGES.includes(i.status as CanonicalKanbanStage) ? i.status : 'Triage') as CanonicalKanbanStage;
+            columns[stage].push(i);
         });
+
+        // Float Online Approved and Customer Replied cards to the top of Our Action
+        columns['Our Action'].sort((a, b) => {
+            const aEst = (a.linkedEstimateId ? estimates.find(e => e.id === a.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === a.id);
+            const bEst = (b.linkedEstimateId ? estimates.find(e => e.id === b.linkedEstimateId) : null) || estimates.find(e => e.linkedInquiryId === b.id);
+            const aScore = (isOnlineApprovedInquiry(a, aEst) ? 2 : 0) + (a.hasNewReply ? 1 : 0);
+            const bScore = (isOnlineApprovedInquiry(b, bEst) ? 2 : 0) + (b.hasNewReply ? 1 : 0);
+            if (aScore !== bScore) return bScore - aScore;
+            return getLatestActivityTime(b) - getLatestActivityTime(a);
+        });
+
         return columns;
-    }, [filteredInquiries]);
+    }, [filteredInquiries, estimates]);
 
     const closedInquiries = useMemo(() => {
         return filteredInquiries.filter(i => {
@@ -1988,12 +2021,10 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 onChange={(e) => setTargetBulkStatus(e.target.value as Inquiry['status'])}
                                 className="bg-indigo-900 border border-indigo-600 text-white text-xs font-bold rounded px-2 py-1 outline-none focus:ring-2 focus:ring-indigo-400 cursor-pointer"
                             >
-                                <option value="">-- Choose Status --</option>
-                                <option value="Inbox">Inbox</option>
-                                <option value="New Requests">New Requests</option>
+                                <option value="">-- Choose Stage --</option>
+                                <option value="Triage">Triage</option>
                                 <option value="Our Action">Our Action</option>
                                 <option value="Waiting on Customer">Waiting on Customer</option>
-                                <option value="Online Approved">Online Approved</option>
                                 <option value="Scheduled">Scheduled</option>
                                 <option value="Closed">Closed</option>
                             </select>
@@ -2216,8 +2247,7 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                                 {/* Status */}
                                                 <td className="py-1.5 px-3 whitespace-nowrap">
                                                     <span className={`inline-block px-1.5 py-0.5 rounded text-[10px] font-bold border ${
-                                                        i.status === 'Inbox' ? 'bg-gray-50 text-gray-700 border-gray-200' :
-                                                        i.status === 'New Requests' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+                                                        i.status === 'Triage' || i.status === 'Inbox' || i.status === 'New Requests' ? 'bg-sky-50 text-sky-700 border-sky-200' :
                                                         i.status === 'Our Action' ? 'bg-orange-50 text-orange-700 border-orange-200' :
                                                         i.status === 'Online Approved' ? 'bg-green-50 text-green-700 border-green-200' :
                                                         i.status === 'Scheduled' ? 'bg-purple-100 text-purple-800 border-purple-300' :
@@ -2300,10 +2330,16 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
             ) : activeTab === 'active' ? (
                 <main className="flex-grow overflow-x-auto pb-2" onMouseLeave={() => setHoveredInquiryId(null)}>
                     <div className="flex gap-4 h-full min-w-full font-sans">
-                        {(['Inbox', 'New Requests', 'Our Action', 'Waiting on Customer', 'Online Approved', 'Scheduled'] as Inquiry['status'][]).map(status => (
+                        {CANONICAL_KANBAN_STAGES.map(status => {
+                            const stageSubtitle =
+                                status === 'Triage' ? 'Unreviewed & new leads' :
+                                status === 'Our Action' ? "Ball in Brookspeed's court" :
+                                status === 'Waiting on Customer' ? "Ball in customer's court" :
+                                'Booked in workshop bay';
+                            return (
                             <div 
                                 key={status} 
-                                className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[280px] h-full transition-colors border-2 border-transparent"
+                                className="flex-1 flex flex-col bg-gray-100 rounded-xl min-w-[290px] h-full transition-colors border-2 border-transparent"
                                 onDragOver={(e) => {
                                     e.preventDefault();
                                     e.currentTarget.classList.add('border-indigo-400', 'bg-indigo-50/50');
@@ -2323,10 +2359,19 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                 }}
                             >
                                 <div 
-                                    className={`p-3 border-b-2 ${status === 'Scheduled' ? 'border-purple-300 bg-purple-50/60 text-purple-950' : 'border-indigo-200 bg-white'} rounded-t-xl font-bold text-gray-700`}
+                                    className={`p-3 border-b-2 ${
+                                        status === 'Scheduled' ? 'border-purple-300 bg-purple-50/60 text-purple-950' :
+                                        status === 'Our Action' ? 'border-amber-300 bg-amber-50/50 text-amber-950' :
+                                        status === 'Triage' ? 'border-sky-300 bg-sky-50/50 text-sky-950' :
+                                        'border-indigo-200 bg-white text-gray-800'
+                                    } rounded-t-xl`}
                                     onMouseEnter={() => setHoveredInquiryId(null)}
                                 >
-                                    {status} ({activeInquiries[status]?.length || 0})
+                                    <div className="font-bold flex items-center justify-between">
+                                        <span>{status}</span>
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-white/80 border border-gray-200 font-bold">{activeInquiries[status]?.length || 0}</span>
+                                    </div>
+                                    <p className="text-[10px] font-medium opacity-75 mt-0.5">{stageSubtitle}</p>
                                 </div>
                                 <div className="p-3 space-y-3 overflow-y-auto flex-grow">
                                     {(activeInquiries[status] || []).map(i => (
@@ -2361,7 +2406,8 @@ const InquiriesView: React.FC<InquiriesViewProps> = (props) => {
                                     ))}
                                 </div>
                             </div>
-                        ))}
+                        );
+                        })}
                     </div>
                 </main>
             ) : (

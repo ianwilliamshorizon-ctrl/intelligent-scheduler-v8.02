@@ -265,3 +265,101 @@ export const getCleanInquirySnippet = (message?: string, maxLength: number = 140
     return clean.substring(0, maxLength).trim() + '...';
 };
 
+export type CanonicalKanbanStage = 'Triage' | 'Our Action' | 'Waiting on Customer' | 'Scheduled';
+
+export const CANONICAL_KANBAN_STAGES: CanonicalKanbanStage[] = [
+    'Triage',
+    'Our Action',
+    'Waiting on Customer',
+    'Scheduled'
+];
+
+export const isOnlineApprovedInquiry = (
+    inquiry: { status?: string; actionStatus?: string },
+    linkedEstimate?: { status?: string } | null
+): boolean => {
+    const lowerStatus = (inquiry.status || '').trim().toLowerCase();
+    return (
+        lowerStatus === 'online approved' ||
+        lowerStatus === 'approved' ||
+        inquiry.actionStatus === 'Estimate Approved' ||
+        linkedEstimate?.status === 'Approved'
+    );
+};
+
+/**
+ * Normalizes legacy and current inquiry statuses into the 4-stage outcome-based Kanban funnel:
+ * - Triage: New / unworked leads needing initial review or enrichment
+ * - Our Action: Ball is in Brookspeed's court (replies, online approvals, quote requests)
+ * - Waiting on Customer: Quote or email sent, awaiting customer response
+ * - Scheduled: Booked into workshop bay
+ * - Closed: Archived / completed / lost
+ */
+export const normalizeInquiryKanbanStage = (
+    inquiry: {
+        status?: string;
+        actionStatus?: string;
+        hasNewReply?: boolean;
+        linkedJobId?: string;
+        fromName?: string;
+        fromEmail?: string;
+    },
+    linkedEstimate?: { status?: string; jobId?: string } | null,
+    linkedJob?: { id?: string; status?: string } | null,
+    linkedCustomer?: { forename?: string; surname?: string } | null
+): CanonicalKanbanStage | 'Closed' => {
+    const rawStatus = (inquiry.status || '').trim();
+    const lowerStatus = rawStatus.toLowerCase();
+
+    if (lowerStatus === 'closed' || lowerStatus === 'archived') {
+        return 'Closed';
+    }
+
+    const jobIsActive = Boolean(linkedJob && linkedJob.status !== 'Invoiced' && linkedJob.status !== 'Cancelled');
+    if (
+        lowerStatus === 'scheduled' ||
+        lowerStatus === 'in progress' ||
+        Boolean(inquiry.linkedJobId) ||
+        Boolean(linkedEstimate?.jobId) ||
+        jobIsActive
+    ) {
+        return 'Scheduled';
+    }
+
+    if (isOnlineApprovedInquiry(inquiry, linkedEstimate)) {
+        return 'Our Action';
+    }
+
+    if (inquiry.hasNewReply) {
+        return 'Our Action';
+    }
+
+    if (
+        lowerStatus === 'our action' ||
+        lowerStatus === 'customer responded' ||
+        lowerStatus === 'responded' ||
+        lowerStatus === 'escalated/urgent' ||
+        lowerStatus === 'rejected'
+    ) {
+        return 'Our Action';
+    }
+
+    const hasBrookspeedName =
+        (inquiry.fromName || '').toLowerCase().includes('brookspeed') ||
+        (inquiry.fromEmail || '').toLowerCase().includes('brookspeed') ||
+        (linkedCustomer?.forename || '').toLowerCase().includes('brookspeed') ||
+        (linkedCustomer?.surname || '').toLowerCase().includes('brookspeed');
+
+    if (
+        lowerStatus === 'waiting on customer' ||
+        lowerStatus === 'quoted or responded' ||
+        lowerStatus === 'sent' ||
+        lowerStatus === 'quoted'
+    ) {
+        return hasBrookspeedName ? 'Triage' : 'Waiting on Customer';
+    }
+
+    return 'Triage';
+};
+
+

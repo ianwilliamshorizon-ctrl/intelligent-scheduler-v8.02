@@ -890,6 +890,20 @@ export interface InquiryLog {
     notes: string;
 }
 
+export interface InquiryAgentPlan {
+    generatedAt: string;
+    intent: 'quote_request' | 'booking_request' | 'status_update' | 'approval' | 'general_enquiry' | 'spam_or_internal';
+    confidence: 'high' | 'medium' | 'low';
+    summary: string;
+    recommendedStage: 'Triage' | 'Our Action' | 'Waiting on Customer' | 'Scheduled';
+    recommendedActionLabel: string;
+    recommendedActionType: 'create_estimate' | 'send_reply' | 'book_job' | 'chase_customer' | 'review_triage';
+    extractedVrm?: string;
+    extractedVehicle?: string;
+    suggestedPackageNames?: string[];
+    draftReply?: string;
+}
+
 export interface Inquiry {
     id: string;
     entityId?: string;
@@ -904,7 +918,7 @@ export interface Inquiry {
     takenByUserId: string;
     assignedToUserId?: string;
     assignedToEntityId?: string;
-    status: 'Inbox' | 'New Requests' | 'Our Action' | 'Waiting on Customer' | 'Online Approved' | 'Scheduled' | 'Closed';
+    status: 'Triage' | 'Inbox' | 'New Requests' | 'Our Action' | 'Waiting on Customer' | 'Online Approved' | 'Scheduled' | 'Closed';
     linkedCustomerId?: string;
     linkedVehicleId?: string;
     vehicleRegistration?: string;
@@ -933,6 +947,7 @@ export interface Inquiry {
     isUrgent?: boolean;
     actionStatus?: ActionStatus;
     aiNextStepSuggestion?: string;
+    agentPlan?: InquiryAgentPlan;
 }
 
 /**

@@ -795,14 +795,22 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
 
         onSave(inquiryToSave, true);
 
-        // TRIGGER AI NEXT STEP SUGGESTION
+        // TRIGGER CONCIERGE AGENT PLAN
         const isStatusChanged = !inquiry || formData.status !== inquiry.status || formData.actionStatus !== inquiry.actionStatus;
-        if (isStatusChanged) {
-            import('../core/services/geminiService').then(({ generateNextStepSuggestion }) => {
-                generateNextStepSuggestion(inquiryToSave).then(suggestion => {
-                    const updatedInquiry = { ...inquiryToSave, aiNextStepSuggestion: suggestion };
+        if (isStatusChanged || !inquiryToSave.agentPlan) {
+            import('../core/services/geminiService').then(({ generateInquiryAgentPlan }) => {
+                generateInquiryAgentPlan(inquiryToSave, {
+                    hasCustomer: Boolean(inquiryToSave.linkedCustomerId),
+                    hasVehicle: Boolean(inquiryToSave.linkedVehicleId || inquiryToSave.vehicleRegistration)
+                }).then(plan => {
+                    const updatedInquiry: Inquiry = {
+                        ...inquiryToSave,
+                        agentPlan: plan,
+                        aiNextStepSuggestion: plan.recommendedActionLabel,
+                        vehicleRegistration: inquiryToSave.vehicleRegistration || plan.extractedVrm || undefined
+                    };
                     onSave(updatedInquiry, false);
-                }).catch(err => console.error("Failed to generate AI next step suggestion:", err));
+                }).catch(err => console.error("Failed to generate AI agent plan:", err));
             });
         }
     };
@@ -2118,14 +2126,15 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                                         <div className="flex gap-2">
                                             <div className="flex-1">
                                                 <label className="block text-[11px] font-bold text-gray-700 mb-1">Status</label>
-                                                <select name="status" value={formData.status || 'Inbox'} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium">
-                                                    <option value="Inbox">Inbox</option>
-                                                    <option value="New Requests">New Requests</option>
+                                                <select name="status" value={formData.status || 'Triage'} onChange={handleChange} className="w-full p-2 border border-gray-300 rounded-lg text-xs bg-gray-50 font-medium">
+                                                    <option value="Triage">Triage (New / Unreviewed)</option>
                                                     <option value="Our Action">Our Action (Priority)</option>
                                                     <option value="Waiting on Customer">Waiting on Customer</option>
-                                                    <option value="Online Approved">Online Approved</option>
                                                     <option value="Scheduled">Scheduled</option>
                                                     <option value="Closed">Closed</option>
+                                                    {formData.status === 'Inbox' && <option value="Inbox">Inbox (Legacy → Triage)</option>}
+                                                    {formData.status === 'New Requests' && <option value="New Requests">New Requests (Legacy → Triage)</option>}
+                                                    {formData.status === 'Online Approved' && <option value="Online Approved">Online Approved (Legacy → Our Action)</option>}
                                                 </select>
                                             </div>
                                             <div className="w-16">
@@ -2291,6 +2300,38 @@ const InquiryFormModal: React.FC<InquiryFormModalProps> = ({
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <div className="space-y-4">
                             <div className="bg-white p-4 border border-gray-200 rounded-lg shadow-sm space-y-4">
+                        {formData.agentPlan && (
+                            <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg space-y-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                                        <Wand2 size={14} className="text-purple-600" />
+                                        Concierge Agent Plan ({formData.agentPlan.intent.replace(/_/g, ' ')})
+                                    </span>
+                                    <span className="text-[10px] font-bold uppercase px-1.5 py-0.5 rounded bg-white border border-purple-200 text-purple-700">
+                                        {formData.agentPlan.confidence} confidence
+                                    </span>
+                                </div>
+                                <p className="text-xs text-purple-900 font-medium">{formData.agentPlan.recommendedActionLabel}</p>
+                                {formData.agentPlan.suggestedPackageNames && formData.agentPlan.suggestedPackageNames.length > 0 && (
+                                    <div className="flex flex-wrap gap-1">
+                                        {formData.agentPlan.suggestedPackageNames.map((pkg, idx) => (
+                                            <span key={idx} className="px-1.5 py-0.5 bg-white border border-purple-200 rounded text-[10px] font-bold text-purple-700">
+                                                {pkg}
+                                            </span>
+                                        ))}
+                                    </div>
+                                )}
+                                {formData.agentPlan.draftReply && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setReplyText(formData.agentPlan!.draftReply!)}
+                                        className="text-xs font-bold text-purple-700 bg-white hover:bg-purple-100 border border-purple-300 px-2.5 py-1 rounded transition"
+                                    >
+                                        Load Pre-Drafted Reply
+                                    </button>
+                                )}
+                            </div>
+                        )}
                         <h4 className="text-sm font-bold text-gray-800 border-b pb-2">Reply to Inquiry</h4>
                         <div>
                             <textarea 

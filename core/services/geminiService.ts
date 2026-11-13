@@ -1,6 +1,7 @@
 import { app } from '../services/firebaseServices';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { repairJsonString } from '../utils/jsonUtils';
+import type { Inquiry, InquiryAgentPlan } from '../../types';
 
 const functions = getFunctions(app, 'europe-west1');
 // Notice the new name here!
@@ -297,4 +298,83 @@ Examples:
         console.error("Error generating next step suggestion:", error);
         throw error;
     }
+};
+
+export interface InquiryAgentContext {
+    availablePackageNames?: string[];
+    hasCustomer?: boolean;
+    hasVehicle?: boolean;
+    estimateStatus?: string;
+    jobStatus?: string;
+}
+
+/**
+ * CONCIERGE AGENT PLANNER
+ * Produces a structured, actionable plan (intent, recommended Kanban stage, matched service packages,
+ * extracted vehicle details, and a ready-to-review customer reply) for an inquiry.
+ */
+export const generateInquiryAgentPlan = async (
+    inquiry: Inquiry,
+    context: InquiryAgentContext = {}
+): Promise<InquiryAgentPlan> => {
+    const recentLogs = (inquiry.logs || [])
+        .slice(-4)
+        .map(l => `* [${l.actionType || 'Note'}] ${l.notes}`)
+        .join('\n');
+
+    const packageListSnippet = (context.availablePackageNames || []).slice(0, 40).join(', ');
+
+    const prompt = `You are the Brookspeed Intake-to-Bay Concierge Agent for an automotive workshop CRM.
+Analyze this inquiry and return a STRICT JSON action plan so an advisor can act in one click.
+
+Inquiry Metadata:
+- Subject: ${inquiry.subject || 'None'}
+- From: ${inquiry.fromName || 'Unknown'} (${inquiry.fromEmail || inquiry.fromPhone || inquiry.fromContact || 'No contact'})
+- Current Stage: ${inquiry.status}
+- Has New Customer Reply: ${Boolean(inquiry.hasNewReply)}
+- Vehicle: ${[inquiry.vehicleRegistration, inquiry.vehicleMake, inquiry.vehicleModel].filter(Boolean).join(' ') || 'Not yet linked'}
+- Customer Linked: ${context.hasCustomer ? 'Yes' : 'No'} | Vehicle Linked: ${context.hasVehicle ? 'Yes' : 'No'}
+- Linked Estimate Status: ${context.estimateStatus || 'None'} | Linked Job Status: ${context.jobStatus || 'None'}
+${packageListSnippet ? `- Available Service Packages (sample): ${packageListSnippet}\n` : ''}
+Message:
+${JSON.stringify((inquiry.message || '').slice(0, 2000))}
+
+${recentLogs ? `Recent Logs:\n${recentLogs}\n` : ''}
+${inquiry.actionNotes ? `Action Notes:\n${inquiry.actionNotes}\n` : ''}
+
+Return ONLY valid JSON matching this exact schema:
+{
+  "intent": "quote_request" | "booking_request" | "status_update" | "approval" | "general_enquiry" | "spam_or_internal",
+  "confidence": "high" | "medium" | "low",
+  "summary": "1 concise sentence summarizing what the customer wants",
+  "recommendedStage": "Triage" | "Our Action" | "Waiting on Customer" | "Scheduled",
+  "recommendedActionLabel": "Short action verb phrase, max 12 words (e.g. 'Create Major Service estimate and reply with availability')",
+  "recommendedActionType": "create_estimate" | "send_reply" | "book_job" | "chase_customer" | "review_triage",
+  "extractedVrm": "UK reg plate if found in text/subject, else empty string",
+  "extractedVehicle": "Make & model if found, else empty string",
+  "suggestedPackageNames": ["Up to 3 matching package names from the Available Service Packages list if relevant"],
+  "draftReply": "Polite, concise, ready-to-send Brookspeed email reply body without subject line or signature placeholder"
+}`;
+
+    const parsed = await parseJobRequest(prompt);
+    const validIntents = ['quote_request', 'booking_request', 'status_update', 'approval', 'general_enquiry', 'spam_or_internal'];
+    const validStages = ['Triage', 'Our Action', 'Waiting on Customer', 'Scheduled'];
+    const validActionTypes = ['create_estimate', 'send_reply', 'book_job', 'chase_customer', 'review_triage'];
+    const validConfidence = ['high', 'medium', 'low'];
+
+    return {
+        generatedAt: new Date().toISOString(),
+        intent: validIntents.includes(parsed?.intent) ? parsed.intent : 'general_enquiry',
+        confidence: validConfidence.includes(parsed?.confidence) ? parsed.confidence : 'medium',
+        summary: (parsed?.summary || inquiry.subject || 'Customer inquiry').toString().trim(),
+        recommendedStage: validStages.includes(parsed?.recommendedStage) ? parsed.recommendedStage : 'Our Action',
+        recommendedActionLabel: (parsed?.recommendedActionLabel || 'Review inquiry and reply to customer.').toString().trim(),
+        recommendedActionType: validActionTypes.includes(parsed?.recommendedActionType) ? parsed.recommendedActionType : 'send_reply',
+        extractedVrm: parsed?.extractedVrm ? String(parsed.extractedVrm).toUpperCase().trim() : undefined,
+        extractedVehicle: parsed?.extractedVehicle ? String(parsed.extractedVehicle).trim() : undefined,
+        suggestedPackageNames: Array.isArray(parsed?.suggestedPackageNames)
+            ? parsed.suggestedPackageNames.map((p: any) => String(p).trim()).filter(Boolean).slice(0, 3)
+            : [],
+        draftReply: parsed?.draftReply ? String(parsed.draftReply).trim() : undefined
+    };
 };
