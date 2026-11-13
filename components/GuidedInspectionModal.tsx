@@ -280,6 +280,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     // Refs for speech recognition and synchronization
     const recognitionRef = useRef<any>(null);
+    const consumedResultIndexRef = useRef<number>(-1);
     const isManuallyStoppedRef = useRef<boolean>(false);
     const subStepRef = useRef<InspectionSubStep>('answer');
     const currentStepIndexRef = useRef<number>(0);
@@ -355,7 +356,9 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
         try {
             cloudSpeechSynthesis.cancel();
-            isSpeakingRef.current = true;
+            // Do not lock out microphone input during the network TTS fetch;
+            // only suppress echo once audio actually begins playing.
+            isSpeakingRef.current = false;
             setIsSpeaking(true);
             lastBotUtteranceRef.current = text.toLowerCase();
 
@@ -385,6 +388,10 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 onDone?.();
             };
 
+            utterance.onplaying = () => {
+                isSpeakingRef.current = true;
+            };
+
             utterance.onend = () => {
                 finishSpeaking();
             };
@@ -393,7 +400,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                 finishSpeaking();
             };
 
-            const dynamicTimeoutMs = Math.max(15000, cleaned.length * 150);
+            const dynamicTimeoutMs = Math.max(4500, cleaned.length * 95);
             safetyTimerRef.current = setTimeout(() => {
                 finishSpeaking();
             }, dynamicTimeoutMs);
@@ -900,13 +907,27 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             recognition.lang = 'en-GB';
 
             recognition.onstart = () => {
+                if (recognitionRef.current !== recognition) return;
+                consumedResultIndexRef.current = -1;
                 setIsListening(true);
                 setVoiceError(null);
                 setNeedsMicPermission(false);
             };
 
             recognition.onresult = (event: any) => {
+                if (recognitionRef.current !== recognition) return;
+
+                const consumeResult = (idx: number, ts: number) => {
+                    lastCommandTimestampRef.current = ts;
+                    consumedResultIndexRef.current = idx;
+                    setLiveTranscript('');
+                };
+
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (i <= consumedResultIndexRef.current) {
+                        continue;
+                    }
+
                     const result = event.results[i];
                     const rawTranscript = result[0]?.transcript || '';
                     const cleaned = normalizeSpeechText(rawTranscript);
@@ -914,13 +935,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                     const now = Date.now();
 
-                    // CRITICAL: Suppress command matching while the host is speaking or during the 400ms room echo settling window.
-                    if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 600)) {
+                    // Suppress command matching while the host is speaking or during the 150ms room echo settling window.
+                    if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 150)) {
                         continue;
                     }
 
-                    // Prevent rapid double triggers within 600ms
-                    if (now - lastCommandTimestampRef.current < 600) {
+                    // Prevent rapid double triggers within 350ms
+                    if (now - lastCommandTimestampRef.current < 350) {
                         continue;
                     }
 
@@ -950,7 +971,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                     // Retake command
                     if (isRetake) {
-                        lastCommandTimestampRef.current = now;
+                        consumeResult(i, now);
                         if (modeRef.current === 'tyres') {
                             if (tyreSubStepRef.current === 'comments') {
                                 handleRetakeTyreComment();
@@ -965,21 +986,21 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                     // Reset finding command (checklist mode)
                     if (isResetFinding && modeRef.current === 'checklist') {
-                        lastCommandTimestampRef.current = now;
+                        consumeResult(i, now);
                         handleResetFinding();
                         return;
                     }
 
                     // Global Navigation
                     if (isRepeat) {
-                        lastCommandTimestampRef.current = now;
+                        consumeResult(i, now);
                         setLastHeardCommand(`Heard: "Repeat" → Replaying Audio`);
                         handleRepeatAudio();
                         return;
                     }
 
                     if (isPause) {
-                        lastCommandTimestampRef.current = now;
+                        consumeResult(i, now);
                         setLastHeardCommand(`Heard: "Pause" → Pausing & Saving`);
                         handlePauseAndSave();
                         return;
@@ -996,18 +1017,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             const isJumpNSR = /\b(?:go to|jump to|select)?\s*(near\s*side\s*rear|nsr|rear\s*left)\b/i.test(cleaned);
                             const isJumpOSR = /\b(?:go to|jump to|select)?\s*(off\s*side\s*rear|osr|rear\s*right)\b/i.test(cleaned);
 
-                            if (isJumpNSF && currentTyreIndexRef.current !== 0) { lastCommandTimestampRef.current = now; handleJumpToTyre(0); return; }
-                            if (isJumpOSF && currentTyreIndexRef.current !== 1) { lastCommandTimestampRef.current = now; handleJumpToTyre(1); return; }
-                            if (isJumpNSR && currentTyreIndexRef.current !== 2) { lastCommandTimestampRef.current = now; handleJumpToTyre(2); return; }
-                            if (isJumpOSR && currentTyreIndexRef.current !== 3) { lastCommandTimestampRef.current = now; handleJumpToTyre(3); return; }
+                            if (isJumpNSF && currentTyreIndexRef.current !== 0) { consumeResult(i, now); handleJumpToTyre(0); return; }
+                            if (isJumpOSF && currentTyreIndexRef.current !== 1) { consumeResult(i, now); handleJumpToTyre(1); return; }
+                            if (isJumpNSR && currentTyreIndexRef.current !== 2) { consumeResult(i, now); handleJumpToTyre(2); return; }
+                            if (isJumpOSR && currentTyreIndexRef.current !== 3) { consumeResult(i, now); handleJumpToTyre(3); return; }
 
                             if (isNext) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 handleNextTyre();
                                 return;
                             }
                             if (isBack) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 handlePreviousTyre();
                                 return;
                             }
@@ -1016,18 +1037,18 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             depthsBufferRef.current = newBuffer;
                             setDepthsBufferDisplay(newBuffer);
                             if (parsedResult) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 handleTyreDepthsSubmit(parsedResult.outer, parsedResult.middle, parsedResult.inner);
                                 return;
                             }
                         } else if (activeSub === 'comments') {
-                            // Don't accept comment input until at least 1000ms after entering comments mode
-                            if (now - tyreSubStepStartTimeRef.current < 1000) {
+                            // Brief settling window after entering comments mode
+                            if (now - tyreSubStepStartTimeRef.current < 250) {
                                 continue;
                             }
 
                             if (isBack) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 setTyreSubStep('depths');
                                 tyreSubStepRef.current = 'depths';
                                 speakText(`Retaking tread depths for ${TYRE_META[activeLoc].spokenName || TYRE_META[activeLoc].position}. Say outer, middle, and inner depths.`);
@@ -1043,19 +1064,19 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                             // User explicitly says "none", "no", "no comment", "continue", "next", "all good", "pass", "skip":
                             if (/\b(none|no|nope|no comment|no comments|all good|pass|good|clear|fine|done|skip|next|continue|proceed)\b/i.test(cleaned)) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 handleTyreCommentSubmit('');
                                 return;
                             }
 
                             // If user dictates a comment, ONLY submit on finalized speech (NEVER on interim!)
                             if (result.isFinal && cleaned.length >= 2) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 handleTyreCommentSubmit(rawTranscript);
                                 return;
                             }
                         } else if (activeSub === 'sparePrompt') {
-                            if (now - tyreSubStepStartTimeRef.current < 1000) {
+                            if (now - tyreSubStepStartTimeRef.current < 250) {
                                 continue;
                             }
 
@@ -1063,13 +1084,13 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             const isNo = /\b(no|nope|nah|none|no spare|no spare tyre|not fitted|n a|na|negative)\b/i.test(cleaned);
 
                             if (isYes) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 setLastHeardCommand('Heard: "Yes" → Spare Tyre');
                                 handleSpareChoice(true);
                                 return;
                             }
                             if (isNo) {
-                                lastCommandTimestampRef.current = now;
+                                consumeResult(i, now);
                                 setLastHeardCommand('Heard: "No" → No Spare Tyre');
                                 handleSpareChoice(false);
                                 return;
@@ -1083,17 +1104,17 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     if (isNext) {
                         const activeSubStep = subStepRef.current;
                         if (activeSubStep === 'findingNotes') {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             const stepIdx = currentStepIndexRef.current;
                             handleFindingNotesSubmit(stepsRef.current[stepIdx]?.comment || '');
                             return;
                         } else if (activeSubStep === 'photoNotes') {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             const stepIdx = currentStepIndexRef.current;
                             handlePhotoNotesSubmit(stepsRef.current[stepIdx]?.photoNotes || '');
                             return;
                         } else {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "Next" → Next Step`);
                             advanceToNextStep();
                             return;
@@ -1101,7 +1122,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     }
 
                     if (isBack) {
-                        lastCommandTimestampRef.current = now;
+                        consumeResult(i, now);
                         setLastHeardCommand(`Heard: "Back" → Previous Step`);
                         handlePreviousStep();
                         return;
@@ -1111,33 +1132,34 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
                     if (activeSubStep === 'answer') {
                         if (isOk) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "${rawTranscript}" → OK / Pass`);
                             handleSelectStatus('ok');
                             return;
                         } else if (isAttention) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "${rawTranscript}" → Attention`);
                             handleSelectStatus('attention');
                             return;
                         } else if (isUrgent) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "${rawTranscript}" → Urgent`);
                             handleSelectStatus('urgent');
                             return;
                         } else if (isNa) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "${rawTranscript}" → N/A`);
                             handleSelectStatus('na');
                             return;
                         }
                     } else if (activeSubStep === 'findingNotes') {
                         if (/\b(done|save|finish notes|complete notes|continue|skip|proceed)\b/i.test(cleaned)) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             const stepIdx = currentStepIndexRef.current;
                             handleFindingNotesSubmit(stepsRef.current[stepIdx]?.comment || '');
                             return;
                         } else if (result.isFinal) {
+                            consumedResultIndexRef.current = i;
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.comment || '';
                             const newComment = existing ? `${existing} ${rawTranscript}` : rawTranscript;
@@ -1153,23 +1175,24 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         }
                     } else if (activeSubStep === 'photoPrompt') {
                         if (isPhotoYes) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "${rawTranscript}" → Photo Required`);
                             handlePhotoChoice(true);
                             return;
                         } else if (isPhotoNo) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             setLastHeardCommand(`Heard: "${rawTranscript}" → No Photo`);
                             handlePhotoChoice(false);
                             return;
                         }
                     } else if (activeSubStep === 'photoNotes') {
                         if (/\b(save|done|finish notes|complete notes)\b/i.test(cleaned)) {
-                            lastCommandTimestampRef.current = now;
+                            consumeResult(i, now);
                             const stepIdx = currentStepIndexRef.current;
                             handlePhotoNotesSubmit(stepsRef.current[stepIdx]?.photoNotes || '');
                             return;
                         } else if (result.isFinal) {
+                            consumedResultIndexRef.current = i;
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.photoNotes || '';
                             const newNotes = existing ? `${existing} ${rawTranscript}` : rawTranscript;
@@ -1187,6 +1210,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             };
 
             recognition.onerror = (event: any) => {
+                if (recognitionRef.current !== recognition) return;
                 if (event.error === 'no-speech') return;
                 if (event.error === 'not-allowed') {
                     setNeedsMicPermission(true);
@@ -1198,15 +1222,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             };
 
             recognition.onend = () => {
+                if (recognitionRef.current !== recognition) return;
+                recognitionRef.current = null;
                 setIsListening(false);
                 if (!isManuallyStoppedRef.current && isOpen) {
                     setTimeout(() => {
-                        if (!isManuallyStoppedRef.current && isOpen) {
-                            try {
-                                recognition.start();
-                            } catch (_) { }
+                        if (!isManuallyStoppedRef.current && isOpen && !recognitionRef.current) {
+                            startRecognitionEngine();
                         }
-                    }, 200);
+                    }, 120);
                 }
             };
 

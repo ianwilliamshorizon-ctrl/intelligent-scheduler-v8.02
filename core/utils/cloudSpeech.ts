@@ -56,6 +56,7 @@ export class CloudSpeechSynthesisUtterance {
     pitch: number = 1.0;
 
     onstart: ((e: any) => void) | null = null;
+    onplaying: ((e: any) => void) | null = null;
     onend: ((e: any) => void) | null = null;
     onerror: ((e: any) => void) | null = null;
 
@@ -73,6 +74,7 @@ class CloudSpeechSynthesis {
     private currentAudio: HTMLAudioElement | null = null;
     private currentUtterance: CloudSpeechSynthesisUtterance | null = null;
     private playbackSessionId = 0;
+    private audioCache = new Map<string, string>();
 
     getVoices() {
         return CLOUD_VOICES as any;
@@ -159,23 +161,47 @@ class CloudSpeechSynthesis {
             for (const segment of segments) {
                 if (!this.speaking || this.playbackSessionId !== sessionId) break;
 
-                const result = await synthesizeCloudSpeechCallable({ 
-                    text: segment, 
-                    voiceName: effectiveVoice.name, 
-                    languageCode: effectiveVoice.lang 
-                });
-                
-                // If cancelled while network request was in-flight, do not play
-                if (!this.speaking || this.playbackSessionId !== sessionId) {
-                    return;
+                const cacheKey = `${effectiveVoice.name}:${segment}`;
+                let audioContent = this.audioCache.get(cacheKey);
+
+                if (!audioContent) {
+                    const timeoutPromise = new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error('Cloud TTS request timed out')), 4000)
+                    );
+                    const result = await Promise.race([
+                        synthesizeCloudSpeechCallable({
+                            text: segment,
+                            voiceName: effectiveVoice.name,
+                            languageCode: effectiveVoice.lang
+                        }),
+                        timeoutPromise
+                    ]);
+
+                    // If cancelled while network request was in-flight, do not play
+                    if (!this.speaking || this.playbackSessionId !== sessionId) {
+                        return;
+                    }
+
+                    const data = result.data as any;
+                    audioContent = data.audioContent;
+                    if (audioContent) {
+                        if (this.audioCache.size >= 150) {
+                            const oldestKey = this.audioCache.keys().next().value;
+                            if (oldestKey !== undefined) this.audioCache.delete(oldestKey);
+                        }
+                        this.audioCache.set(cacheKey, audioContent);
+                    }
                 }
 
-                const data = result.data as any;
+                // If cancelled while retrieving audio, do not play
+                if (!this.speaking || this.playbackSessionId !== sessionId || !audioContent) {
+                    return;
+                }
                 
                 // Create a standard Blob URL to guarantee reliable, uninterrupted streaming in Chromium
                 let audioUrl = '';
                 try {
-                    const binaryString = atob(data.audioContent);
+                    const binaryString = atob(audioContent);
                     const len = binaryString.length;
                     const bytes = new Uint8Array(len);
                     for (let i = 0; i < len; i++) {
@@ -184,7 +210,7 @@ class CloudSpeechSynthesis {
                     const blob = new Blob([bytes], { type: 'audio/mp3' });
                     audioUrl = URL.createObjectURL(blob);
                 } catch (_) {
-                    audioUrl = "data:audio/mp3;base64," + data.audioContent;
+                    audioUrl = "data:audio/mp3;base64," + audioContent;
                 }
 
                 const audio = new Audio(audioUrl);
@@ -203,6 +229,7 @@ class CloudSpeechSynthesis {
                         if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
                         reject(e);
                     };
+                    utterance.onplaying?.(new Event('playing'));
                     audio.play().catch(err => {
                         if (audioUrl.startsWith('blob:')) URL.revokeObjectURL(audioUrl);
                         reject(err);
