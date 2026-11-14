@@ -280,7 +280,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
 
     // Refs for speech recognition and synchronization
     const recognitionRef = useRef<any>(null);
-    const consumedResultIndexRef = useRef<number>(-1);
+    const lastConsumedSlotRef = useRef<{ index: number; cleaned: string }>({ index: -1, cleaned: '' });
     const isManuallyStoppedRef = useRef<boolean>(false);
     const subStepRef = useRef<InspectionSubStep>('answer');
     const currentStepIndexRef = useRef<number>(0);
@@ -868,12 +868,15 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
         onClose();
     }, [syncToParent, saveProgress, saveTyreData, onClose]);
 
-    // Text normalizer to clean punctuation and abbreviations
+    // Text normalizer to clean punctuation, abbreviations, and common mobile phonetic mishearings
     const normalizeSpeechText = (text: string): string => {
         return text
             .toLowerCase()
-            .replace(/o\.k\./gi, 'ok')
-            .replace(/o\.k/gi, 'ok')
+            .replace(/o\.k\.?/gi, 'ok')
+            .replace(/\boh\s+kay\b/gi, 'ok')
+            .replace(/\bokaye?\b/gi, 'ok')
+            .replace(/\ba\s+tension\b/gi, 'attention')
+            .replace(/\bn\.a\.?\b/gi, 'na')
             // Preserve decimal numbers (e.g. 4.5 -> 4xdotx5)
             .replace(/(\d+)\s*\.\s*(\d+)/g, '$1xdotx$2')
             // Remove punctuation other than alphanumeric and whitespace
@@ -882,6 +885,16 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             .replace(/xdotx/g, '.')
             .replace(/\s+/g, ' ')
             .trim();
+    };
+
+    const isLikelyBotEcho = (cleaned: string, botText: string): boolean => {
+        if (!cleaned || !botText) return false;
+        if (botText.includes(cleaned) && cleaned.length >= 6) return true;
+        const words = cleaned.split(' ').filter(w => w.length >= 3);
+        if (words.length < 3) return false;
+        const botNorm = normalizeSpeechText(botText);
+        const overlapCount = words.filter(w => botNorm.includes(w)).length;
+        return overlapCount / words.length >= 0.65;
     };
 
     // Voice Engine Core
@@ -904,11 +917,12 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             recognitionRef.current = recognition;
             recognition.continuous = true;
             recognition.interimResults = true;
+            recognition.maxAlternatives = 3;
             recognition.lang = 'en-GB';
 
             recognition.onstart = () => {
                 if (recognitionRef.current !== recognition) return;
-                consumedResultIndexRef.current = -1;
+                lastConsumedSlotRef.current = { index: -1, cleaned: '' };
                 setIsListening(true);
                 setVoiceError(null);
                 setNeedsMicPermission(false);
@@ -917,26 +931,53 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
             recognition.onresult = (event: any) => {
                 if (recognitionRef.current !== recognition) return;
 
+                let currentFullCleaned = '';
                 const consumeResult = (idx: number, ts: number) => {
                     lastCommandTimestampRef.current = ts;
-                    consumedResultIndexRef.current = idx;
+                    lastConsumedSlotRef.current = { index: idx, cleaned: currentFullCleaned };
                     setLiveTranscript('');
                 };
 
                 for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (i <= consumedResultIndexRef.current) {
-                        continue;
+                    const result = event.results[i];
+                    // Pick the best alternative if one matches a known workshop command
+                    let rawTranscript = result[0]?.transcript || '';
+                    const commandPattern = /\b(ok|o k|pass|passed|past|attention|amber|monitor|caution|warning|urgent|red|fail|failed|not applicable|n a|na|skip|next|continue|back|previous|repeat|pause|stop|yes|yeah|yep|no|nope|none|retake|done|save)\b/i;
+                    if (result.length > 1) {
+                        for (let alt = 0; alt < result.length; alt++) {
+                            const altText = result[alt]?.transcript || '';
+                            if (commandPattern.test(normalizeSpeechText(altText))) {
+                                rawTranscript = altText;
+                                break;
+                            }
+                        }
                     }
 
-                    const result = event.results[i];
-                    const rawTranscript = result[0]?.transcript || '';
-                    const cleaned = normalizeSpeechText(rawTranscript);
+                    const fullCleaned = normalizeSpeechText(rawTranscript);
+                    currentFullCleaned = fullCleaned;
+                    if (!fullCleaned) continue;
+
+                    // Deduplicate exact same slot+transcript (e.g. delayed mobile isFinal),
+                    // or slice off already-consumed prefix if Android appended new speech to the same slot.
+                    let cleaned = fullCleaned;
+                    const prevSlot = lastConsumedSlotRef.current;
+                    if (i === prevSlot.index && prevSlot.cleaned) {
+                        if (fullCleaned === prevSlot.cleaned) {
+                            continue;
+                        }
+                        if (fullCleaned.startsWith(prevSlot.cleaned + ' ')) {
+                            cleaned = fullCleaned.slice(prevSlot.cleaned.length + 1).trim();
+                            if (!cleaned) continue;
+                        }
+                    }
+
                     setLiveTranscript(rawTranscript);
 
                     const now = Date.now();
+                    const inPostSpeechWindow = now - lastSpeechEndTimeRef.current < 1200;
 
-                    // Suppress command matching while the host is speaking or during the 150ms room echo settling window.
-                    if (isSpeakingRef.current || (now - lastSpeechEndTimeRef.current < 150)) {
+                    // Ignore speaker acoustic echo of the bot's own prompt
+                    if ((isSpeakingRef.current || inPostSpeechWindow) && isLikelyBotEcho(cleaned, lastBotUtteranceRef.current)) {
                         continue;
                     }
 
@@ -945,11 +986,11 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                         continue;
                     }
 
-                    // Check if speech matches user commands
-                    const isOk = /\b(ok|okay|o k|pass|passed|good|all good|fine|clear|tick)\b/i.test(cleaned);
+                    // Check if speech matches user commands (including common mobile phonetic variants)
+                    const isOk = /\b(ok|o k|pass|passed|past|good|all good|fine|clear|tick)\b/i.test(cleaned);
                     const isAttention = /\b(attention|amber|monitor|caution|warning|advisory)\b/i.test(cleaned);
                     const isUrgent = /\b(urgent|red|fail|failed|danger|defect|dangerous|broken|replace)\b/i.test(cleaned);
-                    const isNa = /\b(not applicable|n a|na|skip)\b/i.test(cleaned);
+                    const isNa = /\b(not applicable|n a|na|in a|skip)\b/i.test(cleaned);
 
                     const isRetake = /\b(retake|retake note|retake notes|retake depth|retake depths|clear note|clear notes|clear depths|start over|try again|erase note|delete note)\b/i.test(cleaned);
                     const isResetFinding = /\b(change finding|reset finding|change status|reset status|wrong status)\b/i.test(cleaned);
@@ -957,13 +998,23 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                     const isPhotoYes = /\b(yes|yeah|yep|photo|take photo|need photo|require photo|true)\b/i.test(cleaned);
                     const isPhotoNo = /\b(no|nope|nah|none|don't|dont|no photo|negative)\b/i.test(cleaned);
 
-                    const isNext = /\b(next|continue|move on|go next|next step|next question|next tyre|forward)\b/i.test(cleaned);
+                    const isNext = /\b(next|necks|continue|move on|go next|next step|next question|next tyre|forward)\b/i.test(cleaned);
                     const isBack = /\b(back|previous|go back|last step|previous tyre)\b/i.test(cleaned);
                     const isRepeat = /\b(repeat|say again|read again|what was that|pardon)\b/i.test(cleaned);
                     const isPause = /\b(pause|stop|save log|pause inspection|finish inspection)\b/i.test(cleaned);
 
+                    const isDefinitiveCommand = isOk || isAttention || isUrgent || isNa || isRetake || isResetFinding || isPhotoYes || isPhotoNo || isNext || isBack || isRepeat || isPause;
+
+                    // While TTS is speaking, allow short barge-in commands (<= 3 words) and ignore long background/echo phrases
+                    if (isSpeakingRef.current) {
+                        const wordCount = cleaned.split(' ').length;
+                        if (!isDefinitiveCommand || wordCount > 3) {
+                            continue;
+                        }
+                    }
+
                     // Interrupt TTS if a definitive command is spoken
-                    if (isOk || isAttention || isUrgent || isNa || isRetake || isResetFinding || isPhotoYes || isPhotoNo || isNext || isBack || isRepeat || isPause) {
+                    if (isDefinitiveCommand) {
                         cloudSpeechSynthesis.cancel();
                         isSpeakingRef.current = false;
                         setIsSpeaking(false);
@@ -1159,7 +1210,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             handleFindingNotesSubmit(stepsRef.current[stepIdx]?.comment || '');
                             return;
                         } else if (result.isFinal) {
-                            consumedResultIndexRef.current = i;
+                            lastConsumedSlotRef.current = { index: i, cleaned: currentFullCleaned };
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.comment || '';
                             const newComment = existing ? `${existing} ${rawTranscript}` : rawTranscript;
@@ -1192,7 +1243,7 @@ export const GuidedInspectionModal: React.FC<GuidedInspectionModalProps> = ({
                             handlePhotoNotesSubmit(stepsRef.current[stepIdx]?.photoNotes || '');
                             return;
                         } else if (result.isFinal) {
-                            consumedResultIndexRef.current = i;
+                            lastConsumedSlotRef.current = { index: i, cleaned: currentFullCleaned };
                             const stepIdx = currentStepIndexRef.current;
                             const existing = stepsRef.current[stepIdx]?.photoNotes || '';
                             const newNotes = existing ? `${existing} ${rawTranscript}` : rawTranscript;
