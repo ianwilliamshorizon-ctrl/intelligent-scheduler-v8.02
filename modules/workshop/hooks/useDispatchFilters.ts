@@ -98,13 +98,13 @@ export const useDispatchFilters = ({
                     specialization: 'Engineer'
                 };
             });
-        
+
         // 3. Find registered staff users with role 'Engineer'/'Technician' who aren't already represented in engineers
         const staffAsEngineers: Engineer[] = (users || [])
             .filter(u => isTechRole(u.role))
-            .filter(u => !resolvedEngineers.some(e => 
-                e.id === u.id || 
-                (u.engineerId && e.id === u.engineerId) || 
+            .filter(u => !resolvedEngineers.some(e =>
+                e.id === u.id ||
+                (u.engineerId && e.id === u.engineerId) ||
                 (u.name && e.name && e.name.toLowerCase().trim() === u.name.toLowerCase().trim())
             ))
             .map(u => {
@@ -139,7 +139,7 @@ export const useDispatchFilters = ({
             allValidEngineers: combinedValid
         };
     }, [engineers, selectedEntityId, users, businessEntities]);
-    
+
     const entityLifts = useMemo(() => {
         return lifts
             .filter(l => selectedEntityId === 'all' || l.entityId === selectedEntityId)
@@ -156,38 +156,35 @@ export const useDispatchFilters = ({
 
     const { unallocatedJobs, allocatedSegmentsByLift } = useMemo(() => {
         const today = getRelativeDate(0);
-        
+
         // 1. Find all potential unallocated jobs
-        const allPotentialUnallocated = jobs.filter(job => 
-            job.status !== 'Cancelled' && 
+        const allPotentialUnallocated = jobs.filter(job =>
+            job.status !== 'Cancelled' &&
             job.status !== 'Invoiced' &&
             job.status !== 'Closed' &&
             job.vehicleStatus !== 'Awaiting Collection' &&
             job.vehicleStatus !== 'Collected' &&
-            (selectedEntityId === 'all' || job.entityId === selectedEntityId) && 
+            (selectedEntityId === 'all' || job.entityId === selectedEntityId) &&
             (job.segments || []).some(s => s.status === 'Unallocated')
         );
-        
+
         // 2. Filter by On Site status if toggled (Includes Off-Site Partners for tracking)
-        const siteFilteredJobs = showOnSiteOnly 
-            ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site' || job.vehicleStatus === 'Off-Site (Partner)') 
+        const siteFilteredJobs = showOnSiteOnly
+            ? allPotentialUnallocated.filter(job => job.vehicleStatus === 'On Site' || job.vehicleStatus === 'Off-Site (Partner)')
             : allPotentialUnallocated;
-        
-        // 3. Filter by Date
+
+        // 3. Filter by Date (overdue or undated unallocated jobs always stay visible until actioned)
         const dateFilteredJobs = siteFilteredJobs.filter(job => {
-            // If the filter is 'all', show everything that has an unallocated segment
             if (unallocatedDateFilter === 'all') return true;
 
             const firstUnallocatedSegment = (job.segments || []).find(s => s.status === 'Unallocated');
-            
-            // If there's no date and we aren't viewing 'all', we can't match today/7days/etc.
-            if (!firstUnallocatedSegment?.date) return false;
-            
-            const jobDate = firstUnallocatedSegment.date;
-            
-            if (unallocatedDateFilter === 'today') return jobDate === today;
-            if (unallocatedDateFilter === '7days') return jobDate >= today && jobDate <= getRelativeDate(6);
-            if (unallocatedDateFilter === '14days') return jobDate >= today && jobDate <= getRelativeDate(13);
+            const jobDate = firstUnallocatedSegment?.date;
+
+            if (!jobDate) return true;
+
+            if (unallocatedDateFilter === 'today') return jobDate <= today;
+            if (unallocatedDateFilter === '7days') return jobDate <= getRelativeDate(6);
+            if (unallocatedDateFilter === '14days') return jobDate <= getRelativeDate(13);
             return false;
         });
 

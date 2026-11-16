@@ -280,6 +280,43 @@ const DispatchView: React.FC<DispatchViewProps> = ({
         }
     };
 
+    const autoRolledJobIdsRef = React.useRef<Set<string>>(new Set());
+
+    useEffect(() => {
+        if (!jobs || jobs.length === 0) return;
+        const todayStr = getTodayISOString();
+        const overdueItems: { jobId: string; segmentId?: string }[] = [];
+
+        jobs.forEach(job => {
+            if (
+                job.status === 'Cancelled' ||
+                job.status === 'Invoiced' ||
+                job.status === 'Closed' ||
+                job.vehicleStatus === 'Awaiting Collection' ||
+                job.vehicleStatus === 'Collected'
+            ) {
+                return;
+            }
+            if (autoRolledJobIdsRef.current.has(job.id)) return;
+
+            const hasOverdueUnassigned = (job.segments || []).some(seg => {
+                const isUnassigned = seg.status === 'Unallocated' || (!seg.allocatedLift && !seg.engineerId);
+                return isUnassigned && !!seg.date && seg.date < todayStr;
+            });
+
+            if (hasOverdueUnassigned) {
+                autoRolledJobIdsRef.current.add(job.id);
+                overdueItems.push({ jobId: job.id });
+            }
+        });
+
+        if (overdueItems.length > 0) {
+            rollJobsForward(overdueItems).catch(err =>
+                console.error('Auto-rollover of overdue unassigned jobs failed:', err)
+            );
+        }
+    }, [jobs, bankHolidays]);
+
     const handleBookJobForDate = (dateStr?: string) => {
         const targetDate = dateStr ? dateStringToDate(dateStr) : dateStringToDate(currentDate);
         setDefaultDateForModal(targetDate);
