@@ -108,14 +108,12 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
         const getPath = (s: string) => `${COLLECTION_NAME}_${s}`;
         
         try {
-            console.log("📡 AppContext: Syncing production data...");
-            const [dbJobs, dbUsers, dbRoles, dbEntities, dbCustomers, dbVehicles] = await Promise.all([
-                getAll<T.Job>(getPath('jobs')),
+            console.log("📡 AppContext: Syncing core shell data...");
+            // Part 1: Fetch lightweight auth/shell metadata immediately so login & shell boot fast
+            const [dbUsers, dbRoles, dbEntities] = await Promise.all([
                 getAll<T.User>(getPath('users')),
                 getAll<T.Role>(getPath('roles')),
-                getAll<T.BusinessEntity>(getPath('businessEntities')),
-                getAll<T.Customer>(getPath('customers')),
-                getAll<T.Vehicle>(getPath('vehicles'))
+                getAll<T.BusinessEntity>(getPath('businessEntities'))
             ]);
             
             if (dbUsers?.length) setUsers(dbUsers);
@@ -129,9 +127,17 @@ export const AppProvider = ({ children }: { children: React.ReactNode }) => {
                     setSelectedEntityId(dbEntities[0].id);
                 }
             }
-            if (dbCustomers?.length) setCustomers(dbCustomers);
-            if (dbVehicles?.length) setVehicles(dbVehicles);
-            if (dbJobs?.length) setJobs(dbJobs);
+
+            // Part 2: Hydrate heavy AppContext mirror collections in background (non-blocking)
+            Promise.all([
+                getAll<T.Job>(getPath('jobs')),
+                getAll<T.Customer>(getPath('customers')),
+                getAll<T.Vehicle>(getPath('vehicles'))
+            ]).then(([dbJobs, dbCustomers, dbVehicles]) => {
+                if (dbCustomers?.length) setCustomers(dbCustomers);
+                if (dbVehicles?.length) setVehicles(dbVehicles);
+                if (dbJobs?.length) setJobs(dbJobs);
+            }).catch(err => console.warn("AppContext background sync error:", err));
             
             // Sync Backup Schedule
             try {
