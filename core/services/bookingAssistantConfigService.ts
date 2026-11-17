@@ -13,6 +13,12 @@ export interface BookingScriptAddon {
     minAgeYears?: number;
 }
 
+export interface BookingQuickRequirement {
+    id: string;
+    label: string;
+    tag: string;
+}
+
 export interface BookingAssistantConfig {
     scripts: {
         step1GreetingNew: string;
@@ -22,6 +28,7 @@ export interface BookingAssistantConfig {
         step4Closing: string;
     };
     bundles: BookingScriptAddon[];
+    quickRequirements: BookingQuickRequirement[];
     emailConfirmation: {
         subjectTemplate: string;
         bodyTemplate: string;
@@ -99,6 +106,18 @@ export const DEFAULT_BOOKING_ASSISTANT_CONFIG: BookingAssistantConfig = {
             minAgeYears: 1
         }
     ],
+    quickRequirements: [
+        { id: 'minor-bronze', label: '🥉 Minor Service (Bronze)', tag: 'Minor Service - Bronze' },
+        { id: 'minor-silver', label: '🥈 Minor Service (Silver)', tag: 'Minor Service - Silver' },
+        { id: 'minor-gold', label: '🥇 Minor Service (Gold)', tag: 'Minor Service - Gold' },
+        { id: 'major-bronze', label: '🥉 Major Service (Bronze)', tag: 'Major Service - Bronze' },
+        { id: 'major-silver', label: '🥈 Major Service (Silver)', tag: 'Major Service - Silver' },
+        { id: 'major-gold', label: '🥇 Major Service (Gold)', tag: 'Major Service - Gold' },
+        { id: 'mot-test', label: 'MOT Test', tag: 'MOT Test' },
+        { id: 'brake-fluid', label: 'Brake Fluid Flush', tag: 'Brake Fluid' },
+        { id: 'transmission', label: 'Transmission Service', tag: 'Transmission Service' },
+        { id: 'diagnostics', label: 'Diagnostic / Fault Check', tag: 'Diagnostics' }
+    ],
     emailConfirmation: {
         subjectTemplate: "Estimate & Booking Confirmation: {vehicleReg} on {bookingDate} - {companyName}",
         bodyTemplate: 
@@ -150,6 +169,9 @@ export const getBookingAssistantConfig = async (): Promise<BookingAssistantConfi
             bundles: Array.isArray(stored.bundles) && stored.bundles.length > 0 
                 ? stored.bundles 
                 : DEFAULT_BOOKING_ASSISTANT_CONFIG.bundles,
+            quickRequirements: Array.isArray(stored.quickRequirements) && stored.quickRequirements.length > 0
+                ? stored.quickRequirements
+                : DEFAULT_BOOKING_ASSISTANT_CONFIG.quickRequirements,
             emailConfirmation: {
                 ...DEFAULT_BOOKING_ASSISTANT_CONFIG.emailConfirmation,
                 ...(stored.emailConfirmation || {})

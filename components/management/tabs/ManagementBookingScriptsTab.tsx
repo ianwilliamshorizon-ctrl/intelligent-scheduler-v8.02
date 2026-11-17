@@ -21,7 +21,7 @@ export const ManagementBookingScriptsTab: React.FC<ManagementBookingScriptsTabPr
     const [config, setConfig] = useState<BookingAssistantConfig>(DEFAULT_BOOKING_ASSISTANT_CONFIG);
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
-    const [activeSection, setActiveSection] = useState<'scripts' | 'bundles' | 'email'>('scripts');
+    const [activeSection, setActiveSection] = useState<'scripts' | 'bundles' | 'quickRequirements' | 'email'>('scripts');
 
     // Load initial config from database
     useEffect(() => {
@@ -180,6 +180,16 @@ export const ManagementBookingScriptsTab: React.FC<ManagementBookingScriptsTabPr
                 >
                     <Sparkles size={16} />
                     Upsell Bundles & Pitches ({config.bundles.length})
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setActiveSection('quickRequirements')}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
+                        activeSection === 'quickRequirements' ? 'bg-white text-indigo-950 shadow-sm' : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                >
+                    <Layers size={16} />
+                    Quick Packages ({(config.quickRequirements || []).length})
                 </button>
                 <button
                     type="button"
@@ -445,6 +455,88 @@ export const ManagementBookingScriptsTab: React.FC<ManagementBookingScriptsTabPr
                                 />
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* SECTION 4: QUICK-SELECT FREQUENTLY USED PACKAGES */}
+            {activeSection === 'quickRequirements' && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2 border-b pb-3">
+                        <div>
+                            <h3 className="text-base font-bold text-slate-900">Frequently Used Service Packages (Quick Select Chips)</h3>
+                            <p className="text-xs text-slate-500">Tune the quick-select buttons shown in Step 1 of the Booking Assistant.</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() =>
+                                setConfig(prev => ({
+                                    ...prev,
+                                    quickRequirements: [
+                                        ...(prev.quickRequirements || []),
+                                        { id: `qr_${Date.now()}`, label: 'New Service Package', tag: 'New Service Package' }
+                                    ]
+                                }))
+                            }
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition"
+                        >
+                            <Plus size={14} />
+                            <span>Add Chip</span>
+                        </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                        {(config.quickRequirements || []).map((item, idx) => (
+                            <div key={item.id || idx} className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2.5 bg-slate-50 border border-slate-200 rounded-xl">
+                                <div className="sm:col-span-5">
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Button Label</label>
+                                    <input
+                                        type="text"
+                                        value={item.label}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setConfig(prev => {
+                                                const next = [...(prev.quickRequirements || [])];
+                                                next[idx] = { ...next[idx], label: val };
+                                                return { ...prev, quickRequirements: next };
+                                            });
+                                        }}
+                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
+                                    />
+                                </div>
+                                <div className="sm:col-span-6">
+                                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-0.5">Requirement / Match Tag</label>
+                                    <input
+                                        type="text"
+                                        value={item.tag}
+                                        onChange={e => {
+                                            const val = e.target.value;
+                                            setConfig(prev => {
+                                                const next = [...(prev.quickRequirements || [])];
+                                                next[idx] = { ...next[idx], tag: val };
+                                                return { ...prev, quickRequirements: next };
+                                            });
+                                        }}
+                                        className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
+                                    />
+                                </div>
+                                <div className="sm:col-span-1 flex justify-end pt-4 sm:pt-0">
+                                    <button
+                                        type="button"
+                                        title="Remove chip"
+                                        onClick={() =>
+                                            setConfig(prev => ({
+                                                ...prev,
+                                                quickRequirements: (prev.quickRequirements || []).filter((_, i) => i !== idx)
+                                            }))
+                                        }
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition"
+                                    >
+                                        <Trash2 size={14} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             )}

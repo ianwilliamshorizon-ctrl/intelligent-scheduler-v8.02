@@ -4,7 +4,8 @@ import {
     Sparkles, ShieldCheck, ChevronRight, ChevronLeft, ChevronDown, Plus, Copy, 
     CheckCircle2, AlertTriangle, ArrowRight, DollarSign, Wrench, 
     Volume2, CheckSquare, Square, Layers, Info, Headphones, UserPlus, Search,
-    CheckCircle, MessageSquare, Bell, FileText, Gauge, CalendarCheck, AlertCircle, RefreshCw, Eye, Send
+    CheckCircle, MessageSquare, Bell, FileText, Gauge, CalendarCheck, AlertCircle, RefreshCw, Eye, Send,
+    Settings, Trash2, RotateCcw
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import { useData } from '../core/state/DataContext';
@@ -22,10 +23,12 @@ import { sendOutboundEmail } from '../core/services/emailService';
 import { generateEstimateBookingEmailHtml } from '../utils/estimateBookingEmailTemplate';
 import { 
     getBookingAssistantConfig, 
+    saveBookingAssistantConfig,
     interpolateScript, 
     BookingAssistantConfig, 
     DEFAULT_BOOKING_ASSISTANT_CONFIG, 
-    BookingScriptAddon 
+    BookingScriptAddon,
+    BookingQuickRequirement
 } from '../core/services/bookingAssistantConfigService';
 
 export interface ReceptionistBookingModalProps {
@@ -217,6 +220,70 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     const [customerConfirmationEmail, setCustomerConfirmationEmail] = useState<string>('');
     const [showEmailPreview, setShowEmailPreview] = useState<boolean>(false);
     const [isSendingDirectEmail, setIsSendingDirectEmail] = useState<boolean>(false);
+    const [isConfiguringQuickReqs, setIsConfiguringQuickReqs] = useState<boolean>(false);
+    const [newQuickReqLabel, setNewQuickReqLabel] = useState<string>('');
+    const [newQuickReqTag, setNewQuickReqTag] = useState<string>('');
+    const [isSavingQuickReqs, setIsSavingQuickReqs] = useState<boolean>(false);
+
+    const activeQuickRequirements = useMemo(() => {
+        return scriptConfig.quickRequirements && scriptConfig.quickRequirements.length > 0
+            ? scriptConfig.quickRequirements
+            : DEFAULT_BOOKING_ASSISTANT_CONFIG.quickRequirements;
+    }, [scriptConfig.quickRequirements]);
+
+    const persistQuickRequirements = async (nextList: BookingQuickRequirement[], successMsg: string) => {
+        setIsSavingQuickReqs(true);
+        try {
+            const nextConfig: BookingAssistantConfig = {
+                ...scriptConfig,
+                quickRequirements: nextList
+            };
+            await saveBookingAssistantConfig(nextConfig);
+            setScriptConfig(nextConfig);
+            toast.success(successMsg);
+        } catch (err) {
+            console.error('Failed to save quick requirements:', err);
+            toast.error('Failed to save quick requirements list.');
+        } finally {
+            setIsSavingQuickReqs(false);
+        }
+    };
+
+    const handleAddQuickRequirement = async () => {
+        const label = newQuickReqLabel.trim();
+        const tag = (newQuickReqTag.trim() || label).trim();
+        if (!label) {
+            toast.warn('Enter a button label (or select a service package).');
+            return;
+        }
+        if (activeQuickRequirements.some(q => q.tag.toLowerCase() === tag.toLowerCase())) {
+            toast.warn('That requirement tag is already in the list.');
+            return;
+        }
+        const nextList: BookingQuickRequirement[] = [
+            ...activeQuickRequirements,
+            { id: `qr_${Date.now()}`, label, tag }
+        ];
+        await persistQuickRequirements(nextList, 'Added to Quick Select list');
+        setNewQuickReqLabel('');
+        setNewQuickReqTag('');
+    };
+
+    const handleRemoveQuickRequirement = async (id: string) => {
+        const nextList = activeQuickRequirements.filter(q => q.id !== id);
+        if (nextList.length === 0) {
+            toast.warn('Keep at least one quick requirement or use Restore Defaults.');
+            return;
+        }
+        await persistQuickRequirements(nextList, 'Removed from Quick Select list');
+    };
+
+    const handleRestoreDefaultQuickRequirements = async () => {
+        await persistQuickRequirements(
+            DEFAULT_BOOKING_ASSISTANT_CONFIG.quickRequirements,
+            'Restored default Quick Select list'
+        );
+    };
 
     // Reset when modal opens
     useEffect(() => {
@@ -1417,51 +1484,130 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
                                 {/* Preset Requirement Quick Chips */}
                                 <div>
-                                    <div className="flex items-center justify-between mb-2">
+                                    <div className="flex items-center justify-between mb-2 gap-2">
                                         <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                                             Quick Select Common Requirements:
                                         </span>
-                                        <span className="text-[11px] text-slate-400">Click to toggle or combine</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[11px] text-slate-400 hidden sm:inline">Click to toggle or combine</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsConfiguringQuickReqs(prev => !prev)}
+                                                className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold border transition ${
+                                                    isConfiguringQuickReqs
+                                                        ? 'bg-indigo-600 text-white border-indigo-600'
+                                                        : 'bg-white text-slate-600 hover:text-indigo-700 border-slate-300 hover:border-indigo-300'
+                                                }`}
+                                            >
+                                                <Settings size={12} />
+                                                <span>{isConfiguringQuickReqs ? 'Done' : 'Configure'}</span>
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="flex flex-wrap gap-2">
-                                        {[
-                                            { label: '🥉 Minor Service (Bronze)', tag: 'Minor Service - Bronze' },
-                                            { label: '🥈 Minor Service (Silver)', tag: 'Minor Service - Silver' },
-                                            { label: '🥇 Minor Service (Gold)', tag: 'Minor Service - Gold' },
-                                            { label: '🥉 Major Service (Bronze)', tag: 'Major Service - Bronze' },
-                                            { label: '🥈 Major Service (Silver)', tag: 'Major Service - Silver' },
-                                            { label: '🥇 Major Service (Gold)', tag: 'Major Service - Gold' },
-                                            { label: 'MOT Test', tag: 'MOT Test' },
-                                            { label: 'Brake Fluid Flush', tag: 'Brake Fluid' },
-                                            { label: 'Transmission Service', tag: 'Transmission Service' },
-                                            { label: 'Diagnostic / Fault Check', tag: 'Diagnostics' },
-                                        ].map(chip => {
+                                        {activeQuickRequirements.map(chip => {
                                             const isActive = clientRequirement.toLowerCase().includes(chip.tag.toLowerCase());
                                             return (
-                                                <button
-                                                    key={chip.tag}
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (isActive) {
-                                                            const regex = new RegExp(`(,\\s*)?${chip.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${chip.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(,\\s*)?`, 'gi');
-                                                            const updated = clientRequirement.replace(regex, '').trim().replace(/^,\s*|,\s*$/g, '');
-                                                            setClientRequirement(updated);
-                                                        } else {
-                                                            setClientRequirement(prev => prev.trim() ? `${prev.trim()}, ${chip.tag}` : chip.tag);
-                                                        }
-                                                    }}
-                                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 border ${
-                                                        isActive
-                                                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
-                                                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
-                                                    }`}
-                                                >
-                                                    {isActive && <Check size={13} />}
-                                                    <span>{chip.label}</span>
-                                                </button>
+                                                <div key={chip.id || chip.tag} className="inline-flex items-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (isActive) {
+                                                                const regex = new RegExp(`(,\\s*)?${chip.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|${chip.tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(,\\s*)?`, 'gi');
+                                                                const updated = clientRequirement.replace(regex, '').trim().replace(/^,\s*|,\s*$/g, '');
+                                                                setClientRequirement(updated);
+                                                            } else {
+                                                                setClientRequirement(prev => prev.trim() ? `${prev.trim()}, ${chip.tag}` : chip.tag);
+                                                            }
+                                                        }}
+                                                        className={`px-3 py-1.5 ${isConfiguringQuickReqs ? 'rounded-l-xl border-r-0' : 'rounded-xl'} text-xs font-bold transition flex items-center gap-1.5 border ${
+                                                            isActive
+                                                                ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs ring-2 ring-indigo-500/20'
+                                                                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200'
+                                                        }`}
+                                                    >
+                                                        {isActive && <Check size={13} />}
+                                                        <span>{chip.label}</span>
+                                                    </button>
+                                                    {isConfiguringQuickReqs && (
+                                                        <button
+                                                            type="button"
+                                                            disabled={isSavingQuickReqs}
+                                                            title={`Remove "${chip.label}"`}
+                                                            onClick={() => handleRemoveQuickRequirement(chip.id)}
+                                                            className="px-2 py-1.5 rounded-r-xl bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 text-xs font-bold transition disabled:opacity-50"
+                                                        >
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    )}
+                                                </div>
                                             );
                                         })}
                                     </div>
+
+                                    {isConfiguringQuickReqs && (
+                                        <div className="mt-3 p-3.5 bg-slate-50 border border-indigo-200 rounded-xl space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-indigo-950">Tune Frequently Used Service Packages</span>
+                                                <button
+                                                    type="button"
+                                                    disabled={isSavingQuickReqs}
+                                                    onClick={handleRestoreDefaultQuickRequirements}
+                                                    className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-600 hover:text-indigo-700 transition disabled:opacity-50"
+                                                >
+                                                    <RotateCcw size={11} />
+                                                    <span>Restore Defaults</span>
+                                                </button>
+                                            </div>
+                                            <div>
+                                                <label className="block text-[11px] font-bold text-slate-600 mb-1">Quick-Pick from Existing Service Packages (optional)</label>
+                                                <select
+                                                    value=""
+                                                    onChange={(e) => {
+                                                        const pkgName = e.target.value;
+                                                        if (!pkgName) return;
+                                                        setNewQuickReqLabel(pkgName);
+                                                        setNewQuickReqTag(pkgName);
+                                                    }}
+                                                    className="w-full p-2 border border-slate-300 rounded-lg text-xs bg-white"
+                                                >
+                                                    <option value="">-- Select a Service Package to pre-fill --</option>
+                                                    {Array.from(new Set((servicePackages || []).map(p => p.name).filter(Boolean)))
+                                                        .sort((a, b) => a.localeCompare(b))
+                                                        .map(name => (
+                                                            <option key={name} value={name}>{name}</option>
+                                                        ))}
+                                                </select>
+                                            </div>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                <input
+                                                    type="text"
+                                                    value={newQuickReqLabel}
+                                                    onChange={e => setNewQuickReqLabel(e.target.value)}
+                                                    placeholder="Button Label (e.g. Porsche Major Service)"
+                                                    className="px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={newQuickReqTag}
+                                                        onChange={e => setNewQuickReqTag(e.target.value)}
+                                                        placeholder="Match Tag (defaults to label)"
+                                                        className="flex-1 px-3 py-1.5 border border-slate-300 rounded-lg text-xs bg-white"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        disabled={isSavingQuickReqs || !newQuickReqLabel.trim()}
+                                                        onClick={handleAddQuickRequirement}
+                                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition disabled:opacity-50"
+                                                    >
+                                                        <Plus size={13} />
+                                                        <span>Add</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                             
