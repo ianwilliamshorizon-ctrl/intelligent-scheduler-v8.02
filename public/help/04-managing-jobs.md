@@ -2,6 +2,18 @@
 
 **Objective:** To provide a clear and consistent workflow for managing jobs from creation to completion, ensuring that all work is tracked, technicians are assigned, and job statuses are kept up-to-date.
 
+```illustration
+illus-gantt
+```
+
+```illustration
+workflow
+```
+
+```illustration
+mobile
+```
+
 ---
 
 ## 1. Job Creation

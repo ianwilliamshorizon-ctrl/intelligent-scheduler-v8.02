@@ -229,28 +229,8 @@ This section provides visual schematics and realistic operational scenarios for 
 
 ### Illustration 1: Login Screen, Navigation and Remote Co-Browsing
 
-```
-+---------------------------------------------------------------------------------------------------------+
-| [=] BROOKSPEED v8.02 | [Entity: Brookspeed Southampton HQ v] | [Search: Ctrl+K.....] | [AI*] [Mobile] [?] [User] |
-+---------------------------------------------------------------------------------------------------------+
-| [NAV MENU]  |                                                                                           |
-|  Dashboard  |  ACTIVE WORKSHOP WORKING CANVAS                                                          |
-|  Summary    |                                                                                           |
-|* Dispatch   |                                                                                           |
-|  Workflow   |                                                GHOST CURSOR GUIDANCE:                     |
-|  Jobs       |                                                  /|                                       |
-|  Estimates  |                                                 / |  [Dave M. (Workshop Manager)]        |
-|  Invoices   |                                                +--+  "Click here to open Bay 1"           |
-|  Sales      |                                                                                           |
-|  Rentals    |                                                                                           |
-|  Storage    |                                                               +-------------------------+ |
-|  Inquiries  |                                                               | LIVE CO-BROWSE CHAT     | |
-|             |                                                               | Dave: I will guide you. | |
-|             |                                                               | Sarah: Thank you!       | |
-|             |                                                               | [ Type message...   [>] | |
-|             |                                                               +-------------------------+ |
-|             |                                                [ ( ? ) Request Remote Help ] <--- WIDGET  |
-+-------------+-------------------------------------------------------------------------------------------+
+```illustration
+illus-login
 ```
 
 #### Realistic Scenario Data Sheet: Remote Co-Browsing
@@ -268,30 +248,8 @@ This section provides visual schematics and realistic operational scenarios for 
 
 ### Illustration 2: Customer and Vehicle Relational Architecture
 
-```
-                    +----------------------------------------------+
-                    |           CUSTOMER MASTER RECORD             |
-                    |  ID: #CUST-1049                              |
-                    |  Name: Mr. Arthur Pendelton                  |
-                    |  Company: Horizon Logistics UK               |
-                    |  Phone: 07700 900123 • Email: arthur@hz.co.uk|
-                    |  Billing: 14 Southampton Way, SO15 1XX       |
-                    +----------------------------------------------+
-                                          │
-                     ┌────────────────────┼────────────────────┐
-                     ▼                    ▼                    ▼
-        +─────────────────────+ +─────────────────────+ +─────────────────────+
-        | VEHICLE 1: PRIVATE  | | VEHICLE 2: WEEKEND  | | VEHICLE 3: FLEET    |
-        | Reg: VR19 XYZ       | | Reg: OU21 HJK       | | Reg: WX68 BBN       |
-        | Porsche 911 GT3     | | BMW M3 Competition  | | Ford Transit Custom |
-        | VIN: WP0ZZZ99ZKS... | | VIN: WBA8M920...    | | VIN: WF0YXXTTG...   |
-        | Mileage: 42,150 mi  | | Mileage: 18,300 mi  | | Mileage: 94,800 mi  |
-        | MOT: 14/11/2026     | | MOT: 02/08/2027     | | MOT: 19/01/2027     |
-        +─────────────────────+ +─────────────────────+ +─────────────────────+
-                     │                    │                    │
-                     ▼                    ▼                    ▼
-             [Service History]    [Warranty Audit]      [Quarterly Inspec]
-             [#JOB-8842, #8890]   [#JOB-8120]           [#JOB-7940, #8012]
+```illustration
+illus-cust-veh
 ```
 
 #### Key Rules to Remember:
@@ -302,24 +260,8 @@ This section provides visual schematics and realistic operational scenarios for 
 
 ### Illustration 3: Multi-Bay Gantt Resource Planning and FCS Matrix
 
-```
-TIME GRID:   [08:00]      [09:00]      [10:00]      [11:00]      [12:00]      [13:00]      [14:00]      [15:00]      [16:00]
-══════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════════
-BAY 1 (2-POST):
-Dave M. (Master) ───► [ JOB #8842: Audi RS6 Brake & Hub ] ──────────► [ LUNCH ] ──► [ JOB #8851: Porsche Minor Service ]
-                      (VR19 XYZ • Allocated 3.5h)                                    (WX20 ABC • Allocated 2.0h)
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-BAY 2 (4-POST ALIGN):
-Chris T. (Senior) ──► [ JOB #8845: BMW M3 4-Wheel Geometry Alignment ] ──► [ LUNCH ] ──► [ JOB #8853: Suspension Overhaul ]
-                      (OU21 HJK • Allocated 2.5h)                                        (LD22 FGH • Allocated 3.0h)
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-BAY 3 (FAST SERVICE):
-Mark P. (Technician) ► [ JOB #8847: MOT & Interim Service ] ────────► [ LUNCH ] ──► [ JOB #8855: Brake Disc Replacement ]
-                      (GF19 KLP • Allocated 2.0h)                                    (HN18 YZA • Allocated 1.5h)
-──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-BAY 4 (MOT LANE):
-Tester Certified ───► [ MOT-101 ] ──► [ MOT-102 ] ──► [ MOT-103 ] ──► [ LUNCH ] ──► [ MOT-104 ] ──► [ MOT-105 ] ──► [ MOT-106 ]
-                      (08:30)         (09:30)         (10:30)                        (13:30)         (14:30)         (15:30)
+```illustration
+illus-gantt
 ```
 
 #### Operational Workflow:
@@ -330,62 +272,16 @@ Tester Certified ───► [ MOT-101 ] ──► [ MOT-102 ] ──► [ MOT-
 
 ### Illustration 4: Inbound Inquiries, Fast Quotes and Service Packages
 
-```
-   [STEP 1: INBOUND LEAD]           [STEP 2: 1-CLICK QUOTE]             [STEP 3: BUNDLED PACKAGE]
-   Customer calls or submits        Click "Convert to Estimate"         Select Service Package:
-   web form for VR19 XYZ            on Inquiry #INQ-4921                "PKG-MAJ01: 24-Mo Major Service"
-             │                                 │                                    │
-             ▼                                 ▼                                    ▼
-   +───────────────────────+        +───────────────────────+        +────────────────────────────+
-   | INQUIRY #INQ-4921     |        | ESTIMATE #EST-3312    |        | PACKAGE AUTO-POPULATION:   |
-   | From: Sarah Jenkins   |  ───►  | Customer: S. Jenkins  |  ───►  | • 2.5h Labor @ £85 = £212.50|
-   | Vehicle: Ford Puma    |        | Vehicle: Ford Puma    |        | • OE Oil Filter    = £18.50|
-   | Work: Major Service   |        | Status: Draft Quoted  |        | • 5W-30 Synt Oil   = £64.00|
-   +───────────────────────+        +───────────────────────+        | • Spark Plugs (x4) = £48.00|
-                                                                     | • Pollen Filter    = £24.00|
-                                                                     | NET TOTAL:          £367.00|
-                                                                     | VAT (20%):          £73.40 |
-                                                                     | GROSS TOTAL:        £440.40|
-                                                                     +────────────────────────────+
-                                                                                    │
-                                                                                    ▼
-                                                                     [STEP 4: CUSTOMER SIGN-OFF]
-                                                                     Transmitted via SMS link.
-                                                                     Customer clicks "Approve".
-                                                                     Estimate ➔ Active Job Card #JOB-8843!
+```illustration
+illus-quote
 ```
 
 ---
 
 ### Illustration 5: Extended Commercial Suites (Car Sales, Rentals and Storage)
 
-```
-+─────────────────────────────────────────────────────────────────────────────────────────────────────────+
-|                                    COMMERCIAL ENTERPRISE EXPANSION                                       |
-+─────────────────────────────────────────────────────────────────────────────────────────────────────────+
-|                                                   |                                                     |
-|  🏎️ 1. CAR SALES & SHOWROOM                        |  🚙 2. VEHICLE RENTALS & COURTESY FLEET             |
-|  ───────────────────────────                      |  ─────────────────────────────────────              |
-|  • Stock Record: #CS-401 (Porsche 991 GT3 RS)     |  • Fleet Unit: #RENT-04 (VW Golf 2.0 TDI)           |
-|  • Acquisition Type: Sale or Return (SOR)         |  • Booking Ref: #RB-2026-88                         |
-|  • Purchase/Agreed Return: £112,000.00            |  • Hire Duration: 2 Days (Workshop Courtesy)        |
-|  • Workshop Prep Costs: £850.00 (Lift QC pass)    |  • Departure Checks: Fuel 8/8, 31,450 mi            |
-|  • Retail List Price: £124,950.00                 |  • Damage Log: Zero walkaround defects noted        |
-|  • Gross Profit Margin: £12,100.00                |  • Agreement: Digital touchscreen signature         |
-|  • Active Prospects: 4 Buyers Qualified           |  • Return Status: Check-In verified, deposit cleared|
-|                                                   |                                                     |
-|───────────────────────────────────────────────────┴─────────────────────────────────────────────────────|
-|                                                                                                         |
-|  🔒 3. VEHICLE STORAGE & BATTERY CONDITIONING                                                           |
-|  ────────────────────────────────────────────                                                           |
-|  • Storage Facility: Brookspeed Secure Warehouse North (Dehumidified)                                   |
-|  • Assigned Bay: Storage Bay #ST-12 (Prestige Enclosure)                                                |
-|  • Stored Asset: 1968 Ferrari 246 Dino (Chassis #00214)                                                 |
-|  • Battery Conditioner: CTEK Smart Multi-Charger #04 (Connected • 13.6V Floating Float Cycle)           |
-|  • Maintenance Cycle: 30-Day Engine Warm-Up & Tyre Rotation (Scheduled 25th of month)                  |
-|  • Billing Plan: £75.00 + VAT weekly recurring charge (Linked to Automated Monthly Invoices)           |
-|                                                                                                         |
-+─────────────────────────────────────────────────────────────────────────────────────────────────────────+
+```illustration
+illus-commercial
 ```
 
 #### How the Modules Cross-Connect:

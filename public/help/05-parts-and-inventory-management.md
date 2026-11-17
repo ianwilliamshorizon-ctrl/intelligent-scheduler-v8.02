@@ -2,6 +2,10 @@
 
 **Objective:** To maintain an accurate inventory of parts, streamline the purchasing process, and ensure that parts are available when needed for jobs.
 
+```illustration
+inventory
+```
+
 ---
 
 ## 1. Managing the Parts Database

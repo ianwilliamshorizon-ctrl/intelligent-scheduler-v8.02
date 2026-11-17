@@ -713,6 +713,143 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
             </g>
           </svg>
         );
+      case 'inquiries':
+        return (
+          <svg viewBox="0 0 880 240" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="240" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <text x="440" y="26" fill="#e2e8f0" fontSize="12" fontWeight="bold" textAnchor="middle">4-STAGE OUTCOME KANBAN &amp; CONCIERGE AGENT</text>
+            {[
+              { x: 20, title: '1. TRIAGE', sub: 'New & Unreviewed', stroke: '#38bdf8', fill: '#0c4a6e', card: 'New Email / Web Lead', badge: '🤖 Agent Parses VRM' },
+              { x: 235, title: '2. OUR ACTION', sub: "Brookspeed's Court", stroke: '#f59e0b', fill: '#78350f', card: 'Customer Replied / Approved', badge: '⚡ Send AI Reply / Book Bay' },
+              { x: 450, title: '3. WAITING CUSTOMER', sub: "Customer's Court", stroke: '#818cf8', fill: '#312e81', card: 'Quote Sent (#EST-3312)', badge: '⏱ 72h Chase Available' },
+              { x: 665, title: '4. SCHEDULED', sub: 'Booked in Bay', stroke: '#10b981', fill: '#064e3b', card: 'Job #JOB-8843 Allocated', badge: '✓ Auto-Closes on Invoice' }
+            ].map((col, idx) => (
+              <g key={idx} transform={`translate(${col.x}, 42)`}>
+                <rect x="0" y="0" width="195" height="175" rx="10" fill="#1e293b" stroke={col.stroke} strokeWidth="1.5" />
+                <text x="97" y="24" fill="#ffffff" fontSize="11" fontWeight="bold" textAnchor="middle">{col.title}</text>
+                <text x="97" y="40" fill="#94a3b8" fontSize="9" textAnchor="middle">{col.sub}</text>
+                <rect x="12" y="54" width="171" height="62" rx="6" fill="#0f172a" stroke="#334155" />
+                <text x="97" y="80" fill="#e2e8f0" fontSize="10" fontWeight="bold" textAnchor="middle">{col.card}</text>
+                <rect x="18" y="90" width="159" height="20" rx="4" fill={col.fill} />
+                <text x="97" y="104" fill="#fde68a" fontSize="9" fontWeight="bold" textAnchor="middle">{col.badge}</text>
+                <rect x="12" y="130" width="171" height="30" rx="6" fill="#0f172a" strokeDasharray="4 3" stroke="#475569" />
+                <text x="97" y="149" fill="#64748b" fontSize="9" textAnchor="middle">Auto-routed on events</text>
+              </g>
+            ))}
+          </svg>
+        );
+      case 'workflow':
+        return (
+          <svg viewBox="0 0 880 220" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="220" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <text x="440" y="28" fill="#e2e8f0" fontSize="12" fontWeight="bold" textAnchor="middle">LIVE WORKSHOP STREAM: CHECK-IN TO HANDOVER</text>
+            {[
+              { x: 20, label: 'CHECK-IN', detail: 'Mileage • Fuel • Photos', color: '#38bdf8' },
+              { x: 195, label: 'IN PROGRESS', detail: 'Live Tech Stopwatch', color: '#f59e0b' },
+              { x: 370, label: 'AWAITING PARTS', detail: 'PO Sync • Idle Paused', color: '#f43f5e' },
+              { x: 545, label: 'QC SIGN-OFF', detail: 'Safety & Torque Check', color: '#a855f7' },
+              { x: 720, label: 'COLLECTION', detail: 'SMS Sent • Invoice Ready', color: '#10b981' }
+            ].map((s, idx) => (
+              <g key={idx} transform={`translate(${s.x}, 50)`}>
+                <rect x="0" y="0" width="145" height="135" rx="10" fill="#1e293b" stroke={s.color} strokeWidth="1.5" />
+                <text x="72" y="34" fill={s.color} fontSize="11" fontWeight="bold" textAnchor="middle">{s.label}</text>
+                <rect x="12" y="50" width="121" height="44" rx="6" fill="#0f172a" />
+                <text x="72" y="75" fill="#e2e8f0" fontSize="9" textAnchor="middle">{s.detail}</text>
+                <text x="72" y="116" fill="#94a3b8" fontSize="9" textAnchor="middle">Drag or Tap Status</text>
+              </g>
+            ))}
+          </svg>
+        );
+      case 'inventory':
+        return (
+          <svg viewBox="0 0 880 220" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="220" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <g transform="translate(25, 30)">
+              <rect x="0" y="0" width="250" height="160" rx="10" fill="#1e293b" stroke="#38bdf8" strokeWidth="1.5" />
+              <text x="125" y="28" fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="middle">1. MASTER PARTS CATALOG</text>
+              <text x="125" y="65" fill="#e2e8f0" fontSize="10" textAnchor="middle">OE Part # • Bin Location</text>
+              <text x="125" y="90" fill="#94a3b8" fontSize="10" textAnchor="middle">Live Stock &amp; Reorder Min</text>
+              <rect x="20" y="115" width="210" height="28" rx="6" fill="#075985" />
+              <text x="125" y="133" fill="#ffffff" fontSize="10" fontWeight="bold" textAnchor="middle">Reserved to Job #JOB-8842</text>
+            </g>
+            <g transform="translate(315, 30)">
+              <rect x="0" y="0" width="250" height="160" rx="10" fill="#1e293b" stroke="#f59e0b" strokeWidth="1.5" />
+              <text x="125" y="28" fill="#fbbf24" fontSize="11" fontWeight="bold" textAnchor="middle">2. SUPPLIER PURCHASE ORDER</text>
+              <text x="125" y="65" fill="#e2e8f0" fontSize="10" textAnchor="middle">PO #PO-2026-114 (Ordered)</text>
+              <text x="125" y="90" fill="#94a3b8" fontSize="10" textAnchor="middle">Trade Cost &amp; Retail Markup</text>
+              <rect x="20" y="115" width="210" height="28" rx="6" fill="#78350f" />
+              <text x="125" y="133" fill="#fde68a" fontSize="10" fontWeight="bold" textAnchor="middle">1-Click Email to Supplier</text>
+            </g>
+            <g transform="translate(605, 30)">
+              <rect x="0" y="0" width="250" height="160" rx="10" fill="#1e293b" stroke="#10b981" strokeWidth="1.5" />
+              <text x="125" y="28" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">3. GOODS-IN RECONCILIATION</text>
+              <text x="125" y="65" fill="#e2e8f0" fontSize="10" textAnchor="middle">Scan / Mark Received</text>
+              <text x="125" y="90" fill="#94a3b8" fontSize="10" textAnchor="middle">Updates Job &amp; Stock Instantly</text>
+              <rect x="20" y="115" width="210" height="28" rx="6" fill="#064e3b" />
+              <text x="125" y="133" fill="#6ee7b7" fontSize="10" fontWeight="bold" textAnchor="middle">✓ Ready for Technician Fit</text>
+            </g>
+          </svg>
+        );
+      case 'invoicing':
+        return (
+          <svg viewBox="0 0 880 220" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="220" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <g transform="translate(25, 30)">
+              <rect x="0" y="0" width="250" height="160" rx="10" fill="#1e293b" stroke="#a855f7" strokeWidth="1.5" />
+              <text x="125" y="28" fill="#c084fc" fontSize="11" fontWeight="bold" textAnchor="middle">1. RECONCILE JOB CARD</text>
+              <text x="125" y="68" fill="#e2e8f0" fontSize="10" textAnchor="middle">Labor Hours + Fitted Parts</text>
+              <text x="125" y="92" fill="#94a3b8" fontSize="10" textAnchor="middle">20% Statutory UK VAT</text>
+              <rect x="20" y="115" width="210" height="28" rx="6" fill="#581c87" />
+              <text x="125" y="133" fill="#f3e8ff" fontSize="10" fontWeight="bold" textAnchor="middle">Deposits Auto-Deducted</text>
+            </g>
+            <g transform="translate(315, 30)">
+              <rect x="0" y="0" width="250" height="160" rx="10" fill="#1e293b" stroke="#38bdf8" strokeWidth="1.5" />
+              <text x="125" y="28" fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="middle">2. SPLIT TENDER PAYMENTS</text>
+              <text x="125" y="68" fill="#e2e8f0" fontSize="10" textAnchor="middle">Card • BACS • Cash • Finance</text>
+              <text x="125" y="92" fill="#94a3b8" fontSize="10" textAnchor="middle">Full Audit Trail &amp; Timestamps</text>
+              <rect x="20" y="115" width="210" height="28" rx="6" fill="#075985" />
+              <text x="125" y="133" fill="#e0f2fe" fontSize="10" fontWeight="bold" textAnchor="middle">Balance Reconciled: £0.00</text>
+            </g>
+            <g transform="translate(605, 30)">
+              <rect x="0" y="0" width="250" height="160" rx="10" fill="#1e293b" stroke="#10b981" strokeWidth="1.5" />
+              <text x="125" y="28" fill="#34d399" fontSize="11" fontWeight="bold" textAnchor="middle">3. STATUTORY PDF INVOICE</text>
+              <text x="125" y="68" fill="#e2e8f0" fontSize="10" textAnchor="middle">VAT Reg • Remittance • QR</text>
+              <text x="125" y="92" fill="#94a3b8" fontSize="10" textAnchor="middle">1-Click Email to Customer</text>
+              <rect x="20" y="115" width="210" height="28" rx="6" fill="#064e3b" />
+              <text x="125" y="133" fill="#6ee7b7" fontSize="10" fontWeight="bold" textAnchor="middle">✓ Syncs to Financial Ledger</text>
+            </g>
+          </svg>
+        );
+      case 'mobile':
+        return (
+          <svg viewBox="0 0 880 220" className="w-full h-auto rounded-xl drop-shadow">
+            <rect width="880" height="220" rx="12" fill="#0f172a" stroke="#1e293b" strokeWidth="2" />
+            <g transform="translate(30, 28)">
+              <rect x="0" y="0" width="245" height="164" rx="10" fill="#1e293b" stroke="#14b8a6" strokeWidth="1.5" />
+              <text x="122" y="28" fill="#2dd4bf" fontSize="11" fontWeight="bold" textAnchor="middle">1. LIVE TECH CLOCKING</text>
+              <text x="122" y="65" fill="#e2e8f0" fontSize="10" textAnchor="middle">Tap Start / Pause Job</text>
+              <text x="122" y="90" fill="#94a3b8" fontSize="10" textAnchor="middle">Streams Live to Dispatch</text>
+              <rect x="20" y="115" width="205" height="28" rx="6" fill="#134e4a" />
+              <text x="122" y="133" fill="#99f6e4" fontSize="10" fontWeight="bold" textAnchor="middle">⏱ 01:24:10 Active Bay Time</text>
+            </g>
+            <g transform="translate(317, 28)">
+              <rect x="0" y="0" width="245" height="164" rx="10" fill="#1e293b" stroke="#a855f7" strokeWidth="1.5" />
+              <text x="122" y="28" fill="#c084fc" fontSize="11" fontWeight="bold" textAnchor="middle">2. GUIDED VOICE INSPECTION</text>
+              <text x="122" y="65" fill="#e2e8f0" fontSize="10" textAnchor="middle">Hands-Free Prompts &amp; Barge-In</text>
+              <text x="122" y="90" fill="#94a3b8" fontSize="10" textAnchor="middle">&quot;OK&quot; • &quot;Attention&quot; • &quot;Urgent&quot;</text>
+              <rect x="20" y="115" width="205" height="28" rx="6" fill="#581c87" />
+              <text x="122" y="133" fill="#f3e8ff" fontSize="10" fontWeight="bold" textAnchor="middle">🎙 Spoken Tyre Depths (mm)</text>
+            </g>
+            <g transform="translate(604, 28)">
+              <rect x="0" y="0" width="245" height="164" rx="10" fill="#1e293b" stroke="#38bdf8" strokeWidth="1.5" />
+              <text x="122" y="28" fill="#38bdf8" fontSize="11" fontWeight="bold" textAnchor="middle">3. PHOTOS &amp; SIGN-OFF</text>
+              <text x="122" y="65" fill="#e2e8f0" fontSize="10" textAnchor="middle">Camera Defect Capture</text>
+              <text x="122" y="90" fill="#94a3b8" fontSize="10" textAnchor="middle">Digital Touch Signature Pad</text>
+              <rect x="20" y="115" width="205" height="28" rx="6" fill="#075985" />
+              <text x="122" y="133" fill="#e0f2fe" fontSize="10" fontWeight="bold" textAnchor="middle">✓ Ready for QC Review</text>
+            </g>
+          </svg>
+        );
     }
   };
 
@@ -1563,9 +1700,58 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                           ul: ({ ...props }) => <ul className="list-disc pl-5 mb-3 space-y-1 text-sm text-slate-300" {...props} />,
                           ol: ({ ...props }) => <ol className="list-decimal pl-5 mb-3 space-y-1 text-sm text-slate-300" {...props} />,
                           li: ({ ...props }) => <li className="mb-1" {...props} />,
-                          code: ({ ...props }) => (
-                            <code className="bg-slate-800 text-amber-300 font-mono text-xs px-1.5 py-0.5 rounded border border-slate-700" {...props} />
-                          ),
+                          pre: ({ children, ...props }) => {
+                            const childArr = React.Children.toArray(children);
+                            const codeEl = childArr[0] as React.ReactElement<any> | undefined;
+                            const className = codeEl?.props?.className || '';
+                            if (typeof className === 'string' && className.includes('language-illustration')) {
+                              const illusId = String(codeEl?.props?.children || '').trim();
+                              const svgContent = renderTaskIllustrationSvg(illusId);
+                              if (svgContent) {
+                                return (
+                                  <div
+                                    onClick={() =>
+                                      setActiveIllustrationModal({
+                                        id: illusId,
+                                        title: `${selectedSop?.title || 'SOP'} — Visual Schematic`,
+                                        subtitle: 'Standard Operating Procedure Diagram',
+                                        stepNumber: 1,
+                                        desc: 'Interactive vector schematic rendered directly inside the SOP guide.'
+                                      })
+                                    }
+                                    className="my-5 bg-slate-900/90 border border-slate-700/80 hover:border-amber-400/60 rounded-2xl p-4 cursor-zoom-in group transition shadow-lg"
+                                  >
+                                    <div className="flex items-center justify-between mb-2.5">
+                                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5" />
+                                        Interactive Visual Schematic
+                                      </span>
+                                      <span className="text-[10px] font-mono text-slate-400 group-hover:text-amber-300 flex items-center gap-1 transition">
+                                        <ZoomIn className="w-3.5 h-3.5" />
+                                        Click to Enlarge
+                                      </span>
+                                    </div>
+                                    {svgContent}
+                                  </div>
+                                );
+                              }
+                            }
+                            return (
+                              <pre className="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto my-4 text-xs text-slate-200 font-mono" {...props}>
+                                {children}
+                              </pre>
+                            );
+                          },
+                          code: ({ className, children, ...props }) => {
+                            if (className) {
+                              return <code className={className} {...props}>{children}</code>;
+                            }
+                            return (
+                              <code className="bg-slate-800 text-amber-300 font-mono text-xs px-1.5 py-0.5 rounded border border-slate-700" {...props}>
+                                {children}
+                              </code>
+                            );
+                          },
                           table: ({ ...props }) => (
                             <div className="overflow-x-auto my-4">
                               <table className="w-full text-xs text-left border-collapse border border-slate-800 rounded-lg overflow-hidden" {...props} />

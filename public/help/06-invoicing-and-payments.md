@@ -2,6 +2,10 @@
 
 **Objective:** To ensure that all completed work is invoiced accurately and that payments are recorded in a timely manner, maintaining a clear financial record for the business.
 
+```illustration
+invoicing
+```
+
 ---
 
 ## 1. Generating an Invoice

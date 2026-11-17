@@ -2,6 +2,10 @@
 
 **Objective:** To ensure all customer and vehicle information is accurately recorded and maintained within the system. This SOP covers the creation, editing, and viewing of customer and vehicle profiles.
 
+```illustration
+illus-cust-veh
+```
+
 ---
 
 ## 1. Customer Management

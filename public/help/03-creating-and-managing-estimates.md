@@ -1,8 +1,14 @@
 # Standard Operating Procedure: Creating and Managing Estimates
 
-![Intelligent Workflow Preview](/workflow_preview.png)
-
 **Objective:** To standardize the process of creating, editing, and managing estimates for customers, ensuring accuracy in pricing and a clear audit trail.
+
+```illustration
+inquiries
+```
+
+```illustration
+illus-quote
+```
 
 ---
 
