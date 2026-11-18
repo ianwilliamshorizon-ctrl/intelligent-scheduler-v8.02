@@ -207,6 +207,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
     // Step 3: Bundle & Upsell State
     const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
     const [appliedPackageSavings, setAppliedPackageSavings] = useState<number>(0);
+    const [includedOtherEntityIds, setIncludedOtherEntityIds] = useState<string[]>([]);
 
     // Step 4: Scheduler & Capacity State
     const [bookingDate, setBookingDate] = useState<string>(() => {
@@ -309,6 +310,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             setCustomManualName('');
             setSelectedAddonIds([]);
             setAppliedPackageSavings(0);
+            setIncludedOtherEntityIds([]);
             setVrmLookupError('');
             setVrmMatchMessage(null);
             setServiceReminderConsent(true);
@@ -574,9 +576,23 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         };
     }, [activeVehicle]);
     // =========================================================================
+    // Entity-scoped package visibility:
+    // By default show only packages for the active business entity (+ universal/unassigned packages),
+    // plus any additional entities the advisor explicitly toggled in on Step 2.
+    const entityVisiblePackages = useMemo(() => {
+        const includedSet = new Set(includedOtherEntityIds);
+        const selectedSet = new Set(selectedPackageIds);
+        return (servicePackages || []).filter(pkg => {
+            if (selectedSet.has(pkg.id)) return true;
+            if (!pkg.entityId || pkg.entityId === 'all') return true;
+            if (pkg.entityId === selectedEntity.id) return true;
+            return includedSet.has(pkg.entityId);
+        });
+    }, [servicePackages, selectedEntity.id, includedOtherEntityIds, selectedPackageIds]);
+
     const scoredPackages = useMemo(() => {
-        return getScoredServicePackages(servicePackages || [], activeVehicle, clientRequirement);
-    }, [servicePackages, activeVehicle, clientRequirement]);
+        return getScoredServicePackages(entityVisiblePackages, activeVehicle, clientRequirement);
+    }, [entityVisiblePackages, activeVehicle, clientRequirement]);
 
     // Map package ID to its calculated relevance score
     const scoreMap = useMemo(() => {
@@ -2349,6 +2365,52 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     </div>
                                 </div>
 
+                                {/* Cross-Entity Package Visibility Bar */}
+                                {businessEntities.filter(e => e.id !== selectedEntity.id).length > 0 && (
+                                    <div className="mb-4 p-3 bg-white border border-slate-200 rounded-2xl flex flex-wrap items-center justify-between gap-2 text-xs shadow-xs">
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <span className="font-bold text-slate-600">
+                                                Showing <strong className="text-slate-900">{selectedEntity.name}</strong> packages. Add other entity:
+                                            </span>
+                                            {businessEntities
+                                                .filter(e => e.id !== selectedEntity.id)
+                                                .map(ent => {
+                                                    const isIncluded = includedOtherEntityIds.includes(ent.id);
+                                                    return (
+                                                        <button
+                                                            key={ent.id}
+                                                            type="button"
+                                                            onClick={() =>
+                                                                setIncludedOtherEntityIds(prev =>
+                                                                    prev.includes(ent.id)
+                                                                        ? prev.filter(id => id !== ent.id)
+                                                                        : [...prev, ent.id]
+                                                                )
+                                                            }
+                                                            className={`px-2.5 py-1 rounded-lg font-bold border transition flex items-center gap-1 ${
+                                                                isIncluded
+                                                                    ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs'
+                                                                    : 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                                                            }`}
+                                                        >
+                                                            {isIncluded ? <Check size={12} /> : <Plus size={12} />}
+                                                            <span>{ent.name}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                        </div>
+                                        {includedOtherEntityIds.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setIncludedOtherEntityIds([])}
+                                                className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline"
+                                            >
+                                                Reset to {selectedEntity.shortCode || selectedEntity.name} only
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
                                 {clientRequirement.trim() && (
                                     <div className="mb-4 p-3.5 bg-indigo-50/90 border border-indigo-200 rounded-2xl flex items-center justify-between gap-3 text-xs shadow-xs">
                                         <div className="flex items-center gap-2.5">
@@ -2409,6 +2471,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                             <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${spMatch?.badgeColor || 'bg-slate-100 text-slate-800 border-slate-300'}`}>
                                                                 {spMatch?.gradeLabel || (pkg.applicableMake ? `Verified ${pkg.applicableMake}` : 'Universal')}
                                                             </span>
+                                                            {pkg.entityId && pkg.entityId !== 'all' && pkg.entityId !== selectedEntity.id && (
+                                                                <span className="text-[10px] font-bold px-2 py-0.5 rounded border bg-purple-50 text-purple-800 border-purple-200">
+                                                                    {businessEntities.find(e => e.id === pkg.entityId)?.name || 'Other Entity'}
+                                                                </span>
+                                                            )}
                                                             {isNarrativeMatch && (
                                                                 <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded bg-indigo-600 text-white shadow-2xs">
                                                                     ★ Matched Requirement
