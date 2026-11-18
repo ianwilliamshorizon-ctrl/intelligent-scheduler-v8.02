@@ -881,6 +881,35 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         return best;
     }, [selectedPackages, isCustomManualPackage, activeAddons, allCompatiblePackages, selectedEntity, pricingSummary.totalGross]);
 
+    // Direct Silver / Gold / Major tier upgrade options available right on Step 3
+    const tierUpgradeOptions = useMemo(() => {
+        if (isCustomManualPackage) return [];
+        const selectedIdSet = new Set(selectedPackages.map(p => p.id));
+        const baseServiceIds = selectedPackages
+            .filter(p => /\b(service|bronze|silver|gold|minor|interim|major|inspection)\b/i.test(p.name || ''))
+            .map(p => p.id);
+
+        const getRank = (name: string) => {
+            const n = name.toLowerCase();
+            if (n.includes('gold') || n.includes('major')) return 3;
+            if (n.includes('silver') || n.includes('interim')) return 2;
+            if (n.includes('bronze') || n.includes('minor')) return 1;
+            return 0;
+        };
+
+        const currentMaxRank = selectedPackages.reduce((max, p) => Math.max(max, getRank(p.name || '')), 0);
+
+        return allCompatiblePackages
+            .filter(pkg => {
+                if (selectedIdSet.has(pkg.id)) return false;
+                if (pkg.entityId && selectedEntity?.id && pkg.entityId !== selectedEntity.id) return false;
+                const rank = getRank(pkg.name || '');
+                return rank >= 2 && rank >= currentMaxRank;
+            })
+            .slice(0, 4)
+            .map(pkg => ({ pkg, baseServiceIds }));
+    }, [selectedPackages, isCustomManualPackage, allCompatiblePackages, selectedEntity]);
+
     // Prospective Estimate Number for real-time preview before commit
     const prospectiveEstimateNumber = useMemo(() => {
         const entityShortCode = selectedEntity?.shortCode || 'BRK';
@@ -2862,6 +2891,43 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             <li><strong className="text-white">Brake Fluid Moisture:</strong> Fluid is hygroscopic; absorbs 2-3% water every 24 months, which drops the boiling point and lengthens stopping distances.</li>
                                             <li><strong className="text-white">Coolant Additives:</strong> Organic acid technology (OAT) corrosion inhibitors exhaust over 4 years; recommend flush to preserve radiator and water pump seals.</li>
                                         </ul>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* DIRECT SILVER / GOLD UPGRADE SWITCHER ON STEP 3 */}
+                            {tierUpgradeOptions.length > 0 && (
+                                <div className="bg-amber-50/90 border-2 border-amber-300 rounded-3xl p-4 sm:p-5 shadow-sm space-y-2.5">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span className="text-xs font-black uppercase tracking-wider text-amber-950 flex items-center gap-2">
+                                            <Sparkles size={16} className="text-amber-600" />
+                                            Switch Base Service to Silver / Gold (If Client Accepts Pitch)
+                                        </span>
+                                        <span className="text-[11px] font-semibold text-amber-800">
+                                            Replaces current base service while keeping any other selected items
+                                        </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {tierUpgradeOptions.map(({ pkg, baseServiceIds }) => (
+                                            <button
+                                                key={pkg.id}
+                                                type="button"
+                                                onClick={() => {
+                                                    const replaceSet = new Set(baseServiceIds);
+                                                    setSelectedPackageIds(prev => [
+                                                        ...prev.filter(id => !replaceSet.has(id)),
+                                                        pkg.id
+                                                    ]);
+                                                    toast.success(`Switched base service to ${pkg.name} (${formatCurrency(pkg.totalPrice || 0)})`);
+                                                }}
+                                                className="inline-flex items-center gap-2 px-3.5 py-2 bg-white hover:bg-amber-100 border-2 border-amber-400 text-amber-950 rounded-xl text-xs font-black shadow-xs transition"
+                                            >
+                                                <span>Switch to {pkg.name}</span>
+                                                <span className="px-1.5 py-0.5 bg-amber-200/80 rounded text-[11px] font-mono">
+                                                    {formatCurrency(pkg.totalPrice || 0)}
+                                                </span>
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                             )}
