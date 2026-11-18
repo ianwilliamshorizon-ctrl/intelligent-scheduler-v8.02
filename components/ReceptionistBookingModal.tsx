@@ -2696,7 +2696,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                                 </div>
                                                                 <p className="text-xs text-slate-500 line-clamp-1">{pkg.description || 'Full Workshop Service Package'}</p>
                                                                 <div className="text-[11px] text-slate-400 mt-1">
-                                                                    {pkg.costItems?.length ? `${pkg.costItems.length} items included` : 'Package flat rate'} • Bay: {pkg.applicableMake || 'All Makes'}
+                                                                    {pkg.costItems?.length ? `${pkg.costItems.length} items included` : 'Package flat rate'} • Bay: {pkg.applicableMake || 'All Makes'} • <span className="font-bold text-slate-600">Labour: {extractLaborHours(pkg, 1.5)} hrs</span>
                                                                 </div>
                                                             </div>
 
@@ -2924,7 +2924,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             >
                                                 <span>Switch to {pkg.name}</span>
                                                 <span className="px-1.5 py-0.5 bg-amber-200/80 rounded text-[11px] font-mono">
-                                                    {formatCurrency(pkg.totalPrice || 0)}
+                                                    {formatCurrency(pkg.totalPrice || 0)} • {extractLaborHours(pkg, 1.5)}h
                                                 </span>
                                             </button>
                                         ))}
@@ -3147,6 +3147,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             <tr>
                                                 <th className="py-3 px-4 text-left">Package / Service Item</th>
                                                 <th className="py-3 px-4 text-center">Type</th>
+                                                <th className="py-3 px-4 text-center">Labour</th>
                                                 <th className="py-3 px-4 text-right">Price (inc VAT)</th>
                                             </tr>
                                         </thead>
@@ -3156,6 +3157,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                     {currentTierData.name}
                                                 </td>
                                                 <td className="py-3 px-4 text-center text-slate-500 font-semibold text-xs">Scheduled Service</td>
+                                                <td className="py-3 px-4 text-center font-mono font-bold text-slate-700 text-xs">{currentTierData.hours.toFixed(1)}h</td>
                                                 <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
                                                     {formatCurrency(currentTierData.priceGross)}
                                                 </td>
@@ -3168,6 +3170,9 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                                     <td className="py-3 px-4 text-center text-indigo-700 font-bold text-xs">
                                                         Done Together
                                                     </td>
+                                                    <td className="py-3 px-4 text-center font-mono font-bold text-indigo-800 text-xs">
+                                                        {a.laborHours.toFixed(1)}h
+                                                    </td>
                                                     <td className="py-3 px-4 text-right font-mono font-bold text-indigo-900">
                                                         {formatCurrency(a.bundledPrice)}
                                                     </td>
@@ -3176,15 +3181,20 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         </tbody>
                                         <tfoot className="bg-slate-50 border-t border-slate-200 font-bold">
                                             <tr>
-                                                <td colSpan={2} className="py-2.5 px-4 text-right text-slate-500">Net Labour & Parts:</td>
+                                                <td colSpan={2} className="py-2.5 px-4 text-right text-slate-500">Total Workshop Labour:</td>
+                                                <td className="py-2.5 px-4 text-center font-mono text-indigo-700 font-black">{pricingSummary.totalHours.toFixed(1)}h</td>
+                                                <td className="py-2.5 px-4 text-right text-slate-400 text-xs">Allocated</td>
+                                            </tr>
+                                            <tr>
+                                                <td colSpan={3} className="py-2.5 px-4 text-right text-slate-500">Net Labour &amp; Parts:</td>
                                                 <td className="py-2.5 px-4 text-right font-mono text-slate-700">{formatCurrency(pricingSummary.totalNet)}</td>
                                             </tr>
                                             <tr>
-                                                <td colSpan={2} className="py-2.5 px-4 text-right text-slate-500">VAT (20%):</td>
+                                                <td colSpan={3} className="py-2.5 px-4 text-right text-slate-500">VAT (20%):</td>
                                                 <td className="py-2.5 px-4 text-right font-mono text-slate-700">{formatCurrency(pricingSummary.totalVat)}</td>
                                             </tr>
                                             <tr className="text-base bg-indigo-50 text-indigo-950 font-black">
-                                                <td colSpan={2} className="py-3.5 px-4 text-right">Total Amount Payable:</td>
+                                                <td colSpan={3} className="py-3.5 px-4 text-right">Total Amount Payable:</td>
                                                 <td className="py-3.5 px-4 text-right font-mono text-lg text-indigo-900">
                                                     {formatCurrency(pricingSummary.totalGross)}
                                                 </td>
