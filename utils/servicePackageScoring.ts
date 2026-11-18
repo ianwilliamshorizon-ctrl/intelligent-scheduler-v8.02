@@ -118,9 +118,26 @@ const TIER_CLUSTERS: IntentCluster[] = [
 
 // Distinct model families to prevent cross-model package pollution within the same manufacturer
 const MODEL_FAMILIES = [
-    'macan', 'cayenne', 'panamera', 'boxster', 'cayman', '911', '996', '997', '991', '992', 
-    '930', '964', '993', '718', '981', 'gt3', 'evoque', 'velar', 'sport', 'discovery', 'defender'
+    // Porsche
+    'macan', 'cayenne', 'panamera', 'boxster', 'cayman', 'taycan', '911', '996', '997', '991', '992',
+    '930', '964', '993', '718', '981', '986', '987', 'gt3', 'gt2', 'gt4',
+    // Land Rover / Range Rover
+    'evoque', 'velar', 'discovery', 'defender', 'freelander',
+    // BMW
+    'e30', 'e36', 'e46', 'e90', 'e91', 'e92', 'e93', 'f30', 'f80', 'g20', 'g80',
+    'e39', 'e60', 'f10', 'g30', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7',
+    'z3', 'z4', 'm2', 'm3', 'm4', 'm5', 'm6', 'm8', 'i3', 'i4', 'i8', 'ix',
+    // Audi
+    'a1', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8', 'q2', 'q3', 'q5', 'q7', 'q8',
+    'r8', 'rs3', 'rs4', 'rs5', 'rs6', 'rs7', 's3', 's4', 's5', 'tt', 'etron',
+    // VW
+    'golf', 'polo', 'passat', 'tiguan', 'touareg', 'transporter', 'caddy', 'amarok', 'scirocco'
 ];
+
+const findModelFamily = (text: string): string | undefined => {
+    if (!text) return undefined;
+    return MODEL_FAMILIES.find(fam => new RegExp(`\\b${fam}\\b`, 'i').test(text));
+};
 
 export const getScoredServicePackages = (
     servicePackages: ServicePackage[], 
@@ -209,13 +226,13 @@ export const getScoredServicePackages = (
         let hasCrossModelConflict = false;
 
         if (vModelTokens.length > 0) {
-            const vehicleFamily = MODEL_FAMILIES.find(fam => vFullModelStr.includes(fam));
-            const pkgFamily = MODEL_FAMILIES.find(fam => pkgFullText.includes(fam));
+            const vehicleFamily = findModelFamily(vFullModelStr);
+            const pkgFamily = findModelFamily(pkgFullText);
 
             if (vehicleFamily && pkgFamily && vehicleFamily !== pkgFamily) {
                 hasCrossModelConflict = true;
             } else {
-                const matchedTokens = vModelTokens.filter(tok => pkgFullText.includes(tok));
+                const matchedTokens = vModelTokens.filter(tok => new RegExp(`\\b${tok}\\b`, 'i').test(pkgFullText));
                 if (matchedTokens.length > 0 || (pModel && vModelRaw && (pModel.includes(vModelRaw) || vModelRaw.includes(pModel)))) {
                     isModelExact = true;
                 }
@@ -283,8 +300,17 @@ export const getScoredServicePackages = (
                     color = 'bg-blue-50 text-blue-900 border-blue-300';
                     badgeColor = 'bg-blue-100 text-blue-900 border-blue-400 font-bold';
                 }
+            } else if (hasCrossModelConflict) {
+                // Explicitly belongs to a different model family of the same make (e.g. E36 package vs X6 vehicle)
+                grade = 'other';
+                gradeLabel = 'Model Conflict';
+                matchType = 'Model Conflict';
+                status = 'other';
+                score = 0;
+                color = 'bg-gray-50 text-gray-400';
+                badgeColor = 'bg-red-50 text-red-600 border-red-200';
             } else {
-                // Make matches, but different model in the brand catalog
+                // Make matches, generic/unspecified model in the brand catalog
                 grade = 'make';
                 gradeLabel = 'Make Match (Partial)';
                 matchType = 'Make Match (Other Model)';

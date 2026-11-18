@@ -188,7 +188,13 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
     // Step 2: Service Matching & Real DMS Database State
     const [serviceSourceTab, setServiceSourceTab] = useState<'matched' | 'all-dms' | 'custom'>('matched');
-    const [selectedPackageId, setSelectedPackageId] = useState<string>('');
+    const [selectedPackageIds, setSelectedPackageIds] = useState<string[]>([]);
+    const selectedPackageId = selectedPackageIds[0] || '';
+    const setSelectedPackageId = (id: string | null) => setSelectedPackageIds(id ? [id] : []);
+    const togglePackageSelection = (id: string) => {
+        setIsCustomManualPackage(false);
+        setSelectedPackageIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+    };
     const [packageSearchTerm, setPackageSearchTerm] = useState('');
     const [tierFilter, setTierFilter] = useState<'all' | 'bronze' | 'silver' | 'gold' | 'minor' | 'major'>('all');
     const [showOtherMakePackages, setShowOtherMakePackages] = useState(false);
@@ -624,10 +630,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         };
     }, [scoredPackages]);
 
-    // Active selected package from real database
-    const selectedPackage = useMemo(() => {
-        return (servicePackages || []).find(p => p.id === selectedPackageId) || null;
-    }, [servicePackages, selectedPackageId]);
+    // Active selected packages from real database (supports multiple packages on Step 2)
+    const selectedPackages = useMemo(() => {
+        return (servicePackages || []).filter(p => selectedPackageIds.includes(p.id));
+    }, [servicePackages, selectedPackageIds]);
+    const selectedPackage = selectedPackages[0] || null;
 
     // Auto-select top matching database package based on vehicle & client requirement narrative
     useEffect(() => {
@@ -692,18 +699,21 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             };
         }
 
-        if (selectedPackage) {
+        if (selectedPackages.length > 0) {
             return {
-                id: selectedPackage.id,
-                name: selectedPackage.name,
-                subtitle: selectedPackage.description || `Database Package #${selectedPackage.id}`,
-                priceGross: selectedPackage.totalPrice || 0,
-                hours: extractLaborHours(selectedPackage, 1.5),
-                tag: 'DMS Package',
+                id: selectedPackages.map(p => p.id).join('+'),
+                name: selectedPackages.map(p => p.name).join(' + '),
+                subtitle: selectedPackages.length > 1
+                    ? `${selectedPackages.length} Service Packages Selected`
+                    : (selectedPackages[0].description || `Database Package #${selectedPackages[0].id}`),
+                priceGross: selectedPackages.reduce((sum, p) => sum + (p.totalPrice || 0), 0),
+                hours: selectedPackages.reduce((sum, p) => sum + extractLaborHours(p, 1.5), 0),
+                tag: selectedPackages.length > 1 ? `${selectedPackages.length} DMS Packages` : 'DMS Package',
                 tagColor: 'bg-emerald-100 text-emerald-950 border-emerald-400 font-bold',
                 isDmsPackage: true,
-                dmsPackage: selectedPackage,
-                highlights: extractHighlights(selectedPackage, [selectedPackage.description || 'Full Workshop Service Package'])
+                dmsPackage: selectedPackages[0],
+                dmsPackages: selectedPackages,
+                highlights: selectedPackages.flatMap(p => extractHighlights(p, [p.description || 'Full Workshop Service Package']))
             };
         }
 
@@ -717,9 +727,10 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             tagColor: 'bg-slate-100 text-slate-500',
             isDmsPackage: false,
             dmsPackage: null,
+            dmsPackages: [] as ServicePackage[],
             highlights: []
         };
-    }, [isCustomManualPackage, customManualName, customManualPrice, customManualHours, selectedPackage, activeVehicle]);
+    }, [isCustomManualPackage, customManualName, customManualPrice, customManualHours, selectedPackages, activeVehicle]);
 
     const activeAddons = useMemo(() => 
         (scriptConfig.bundles && scriptConfig.bundles.length > 0 ? scriptConfig.bundles : BUNDLE_ADDONS).filter(addon => selectedAddonIds.includes(addon.id)),
@@ -1130,46 +1141,54 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
             // Build Line Items
             const lineItems: EstimateLineItem[] = [];
+            const dmsPackagesToAdd: (ServicePackage | null)[] =
+                (currentTierData as any).dmsPackages && (currentTierData as any).dmsPackages.length > 0
+                    ? (currentTierData as any).dmsPackages
+                    : [currentTierData.dmsPackage];
 
-            const packageId = currentTierData.dmsPackage?.id || `pkg_${Date.now()}`;
-            const packageName = currentTierData.dmsPackage?.name || currentTierData.name;
-            const packageNetPrice = Math.round((currentTierData.priceGross / (1 + (standardTaxRate / 100))) * 100) / 100;
-            const packageCost = (currentTierData.dmsPackage?.costItems || []).reduce(
-                (sum, ci) => sum + ((ci.unitCost || 0) * (ci.quantity || 1)),
-                0
-            ) || Math.round(currentTierData.hours * 45 * 100) / 100;
+            dmsPackagesToAdd.forEach((dmsPkg) => {
+                const packageId = dmsPkg?.id || `pkg_${Date.now()}`;
+                const packageName = dmsPkg?.name || currentTierData.name;
+                const pkgGross = dmsPkg ? (dmsPkg.totalPrice || 0) : currentTierData.priceGross;
+                const pkgHours = dmsPkg ? extractLaborHours(dmsPkg, 1.5) : currentTierData.hours;
+                const packageNetPrice = Math.round((pkgGross / (1 + (standardTaxRate / 100))) * 100) / 100;
+                const packageCost = (dmsPkg?.costItems || []).reduce(
+                    (sum, ci) => sum + ((ci.unitCost || 0) * (ci.quantity || 1)),
+                    0
+                ) || Math.round(pkgHours * 45 * 100) / 100;
 
-            // 1. Primary Service Package Header (Top-level)
-            lineItems.push({
-                id: crypto.randomUUID(),
-                description: packageName,
-                quantity: 1,
-                unitPrice: packageNetPrice,
-                unitCost: packageCost,
-                isLabor: false,
-                taxCodeId: currentTierData.dmsPackage?.taxCodeId || standardTaxRateId,
-                servicePackageId: packageId,
-                servicePackageName: packageName,
-                isPackageComponent: false,
-                isOptional: false
-            });
-
-            // 2. Child Cost Items (Parts & Labor included in package rate)
-            if (currentTierData.dmsPackage?.costItems && currentTierData.dmsPackage.costItems.length > 0) {
-                currentTierData.dmsPackage.costItems.forEach(item => {
-                    lineItems.push({
-                        ...item,
-                        id: crypto.randomUUID(),
-                        unitPrice: 0,
-                        unitCost: item.unitCost || 0,
-                        taxCodeId: item.taxCodeId || currentTierData.dmsPackage?.taxCodeId || standardTaxRateId,
-                        servicePackageId: packageId,
-                        servicePackageName: packageName,
-                        isPackageComponent: true,
-                        isOptional: false
-                    });
+                // 1. Service Package Header (Top-level)
+                lineItems.push({
+                    id: crypto.randomUUID(),
+                    description: packageName,
+                    quantity: 1,
+                    unitPrice: packageNetPrice,
+                    unitCost: packageCost,
+                    isLabor: false,
+                    taxCodeId: dmsPkg?.taxCodeId || standardTaxRateId,
+                    servicePackageId: packageId,
+                    servicePackageName: packageName,
+                    isPackageComponent: false,
+                    isOptional: false
                 });
-            }
+
+                // 2. Child Cost Items (Parts & Labor included in package rate)
+                if (dmsPkg?.costItems && dmsPkg.costItems.length > 0) {
+                    dmsPkg.costItems.forEach(item => {
+                        lineItems.push({
+                            ...item,
+                            id: crypto.randomUUID(),
+                            unitPrice: 0,
+                            unitCost: item.unitCost || 0,
+                            taxCodeId: item.taxCodeId || dmsPkg?.taxCodeId || standardTaxRateId,
+                            servicePackageId: packageId,
+                            servicePackageName: packageName,
+                            isPackageComponent: true,
+                            isOptional: false
+                        });
+                    });
+                }
+            });
 
             // 2. Bundled Addons
             activeAddons.forEach(addon => {
@@ -1799,7 +1818,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         </div>
                                         <div>
                                             <span className="text-slate-400 block text-xs font-bold uppercase mb-1">Fuel Type</span>
-                                            <div className="flex items-center gap-1.5">
+                                            <div className="flex flex-col items-start gap-1.5">
                                                 <span className={`font-bold text-xs px-2 py-0.5 rounded-md border ${
                                                     activeVehicle.fuelType === 'Diesel' ? 'bg-amber-100 text-amber-950 border-amber-300' :
                                                     activeVehicle.fuelType === 'Petrol' ? 'bg-blue-100 text-blue-950 border-blue-300' :
@@ -2276,7 +2295,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     };
 
                                     const renderPackageCard = (pkg: ServicePackage) => {
-                                        const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
+                                        const isSelected = selectedPackageIds.includes(pkg.id) && !isCustomManualPackage;
                                         const laborHours = extractLaborHours(pkg, 1.5);
                                         const highlights = extractHighlights(pkg, [pkg.description || 'Full Workshop Service Package']);
                                         const spMatch = scoredPackages.find(s => s.pkg.id === pkg.id);
@@ -2285,10 +2304,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         return (
                                             <div
                                                 key={pkg.id}
-                                                onClick={() => {
-                                                    setSelectedPackageId(pkg.id);
-                                                    setIsCustomManualPackage(false);
-                                                }}
+                                                onClick={() => togglePackageSelection(pkg.id)}
                                                 className={`rounded-3xl p-5 border-2 cursor-pointer transition-all flex flex-col justify-between ${
                                                     isSelected
                                                         ? 'border-indigo-600 bg-indigo-50/70 shadow-lg ring-4 ring-indigo-500/20'
@@ -2572,14 +2588,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             {scoredPackages
                                                 .filter(sp => (!filterCompatibleOnly || isPackageCompatible(sp.pkg)) && (!packageSearchTerm || (sp.pkg.name || '').toLowerCase().includes(packageSearchTerm.toLowerCase())))
                                                 .map(({ pkg, score, matchType, color }) => {
-                                                    const isSelected = selectedPackageId === pkg.id && !isCustomManualPackage;
+                                                    const isSelected = selectedPackageIds.includes(pkg.id) && !isCustomManualPackage;
                                                     return (
                                                         <div 
                                                             key={pkg.id}
-                                                            onClick={() => {
-                                                                setSelectedPackageId(pkg.id);
-                                                                setIsCustomManualPackage(false);
-                                                            }}
+                                                            onClick={() => togglePackageSelection(pkg.id)}
                                                             className={`p-4 flex flex-wrap items-center justify-between gap-4 cursor-pointer hover:bg-indigo-50/60 transition ${
                                                                 isSelected ? 'bg-indigo-50/90 border-l-4 border-indigo-600' : ''
                                                             }`}
@@ -3463,7 +3476,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                             </div>
 
                             {/* Running Financial Total */}
-                            {(selectedPackageId || isCustomManualPackage) && pricingSummary.tierGross > 0 ? (
+                            {(selectedPackageIds.length > 0 || isCustomManualPackage) && pricingSummary.tierGross > 0 ? (
                                 <div className="bg-indigo-950 text-white rounded-2xl p-4 shadow-sm space-y-2">
                                     <div className="flex justify-between items-center text-xs text-indigo-200">
                                         <span className="truncate pr-2 font-medium">{currentTierData.name}</span>
