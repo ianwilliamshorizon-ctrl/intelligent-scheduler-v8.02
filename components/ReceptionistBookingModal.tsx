@@ -200,6 +200,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
     // Step 3: Bundle & Upsell State
     const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
+    const [appliedPackageSavings, setAppliedPackageSavings] = useState<number>(0);
 
     // Step 4: Scheduler & Capacity State
     const [bookingDate, setBookingDate] = useState<string>(() => {
@@ -301,6 +302,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             setIsCustomManualPackage(false);
             setCustomManualName('');
             setSelectedAddonIds([]);
+            setAppliedPackageSavings(0);
             setVrmLookupError('');
             setVrmMatchMessage(null);
             setServiceReminderConsent(true);
@@ -731,7 +733,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         const totalGross = tierGross + addonsGross;
 
         const standaloneAddons = activeAddons.reduce((sum, a) => sum + a.standalonePrice, 0);
-        const totalSavings = standaloneAddons - addonsGross;
+        const totalSavings = Math.max(0, (standaloneAddons - addonsGross) + appliedPackageSavings);
 
         const vatFactor = 1 + (standardTaxRate / 100);
         const totalNet = totalGross / vatFactor;
@@ -748,7 +750,64 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             totalSavings,
             totalHours
         };
-    }, [currentTierData, activeAddons, standardTaxRate]);
+    }, [currentTierData, activeAddons, standardTaxRate, appliedPackageSavings]);
+
+    // Smart Package Upgrade Optimizer:
+    // Checks if a higher-tier compatible package (e.g. Silver or Gold) already includes
+    // one or more selected add-ons for a lower combined total than Base + Add-ons.
+    const bestUpgradeRecommendation = useMemo(() => {
+        if (!selectedPackage || isCustomManualPackage || activeAddons.length === 0) return null;
+
+        const addonMatchesPackage = (addon: BookingScriptAddon, pkg: ServicePackage): boolean => {
+            const haystack = [
+                pkg.name || '',
+                pkg.description || '',
+                ...(pkg.costItems || []).map(ci => ci.description || '')
+            ].join(' ').toLowerCase();
+
+            const idNorm = (addon.id || '').toLowerCase();
+            if (idNorm.includes('brake-fluid') && haystack.includes('brake fluid')) return true;
+            if (idNorm.includes('mot') && /\bmot\b/.test(haystack)) return true;
+            if (idNorm.includes('air-con') && (haystack.includes('air con') || haystack.includes('aircon') || haystack.includes('regas'))) return true;
+            if (idNorm.includes('coolant') && (haystack.includes('coolant') || haystack.includes('antifreeze'))) return true;
+            if (idNorm.includes('wiper') && haystack.includes('wiper')) return true;
+
+            const keywords = (addon.name || '')
+                .toLowerCase()
+                .replace(/[^a-z0-9\s]/g, ' ')
+                .split(/\s+/)
+                .filter(w => w.length >= 4 && !['service', 'system', 'front', 'pair', 'official', 'bosch'].includes(w));
+
+            if (keywords.length === 0) return false;
+            const hits = keywords.filter(kw => haystack.includes(kw)).length;
+            return hits >= Math.min(2, keywords.length);
+        };
+
+        let best: {
+            pkg: ServicePackage;
+            includedAddons: BookingScriptAddon[];
+            upgradedTotal: number;
+            savings: number;
+        } | null = null;
+
+        for (const candidate of allCompatiblePackages) {
+            if (candidate.id === selectedPackage.id) continue;
+            if (candidate.entityId && selectedEntity?.id && candidate.entityId !== selectedEntity.id) continue;
+
+            const includedAddons = activeAddons.filter(a => addonMatchesPackage(a, candidate));
+            if (includedAddons.length === 0) continue;
+
+            const remainingAddons = activeAddons.filter(a => !includedAddons.some(inc => inc.id === a.id));
+            const upgradedTotal = (candidate.totalPrice || 0) + remainingAddons.reduce((sum, a) => sum + a.bundledPrice, 0);
+            const savings = pricingSummary.totalGross - upgradedTotal;
+
+            if (savings > 0.5 && (!best || savings > best.savings)) {
+                best = { pkg: candidate, includedAddons, upgradedTotal, savings };
+            }
+        }
+
+        return best;
+    }, [selectedPackage, isCustomManualPackage, activeAddons, allCompatiblePackages, selectedEntity, pricingSummary.totalGross]);
 
     // Prospective Estimate Number for real-time preview before commit
     const prospectiveEstimateNumber = useMemo(() => {
@@ -2730,6 +2789,40 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             <li><strong className="text-white">Coolant Additives:</strong> Organic acid technology (OAT) corrosion inhibitors exhaust over 4 years; recommend flush to preserve radiator and water pump seals.</li>
                                         </ul>
                                     </div>
+                                </div>
+                            )}
+
+                            {/* SMART PACKAGE UPGRADE RECOMMENDATION (SILVER / GOLD OPTIMIZER) */}
+                            {bestUpgradeRecommendation && (
+                                <div className="bg-emerald-50 border-2 border-emerald-400 rounded-3xl p-5 shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                    <div className="space-y-1">
+                                        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-[11px] font-black uppercase tracking-wider">
+                                            <Sparkles size={12} />
+                                            Better Bundle Detected • Save {formatCurrency(bestUpgradeRecommendation.savings)}
+                                        </div>
+                                        <h4 className="text-base font-black text-emerald-950">
+                                            Upgrade to {bestUpgradeRecommendation.pkg.name} ({formatCurrency(bestUpgradeRecommendation.pkg.totalPrice || 0)})
+                                        </h4>
+                                        <p className="text-xs sm:text-sm text-emerald-900">
+                                            Already includes <strong>{bestUpgradeRecommendation.includedAddons.map(a => a.name).join(' &amp; ')}</strong> — total drops from{' '}
+                                            <span className="line-through font-semibold">{formatCurrency(pricingSummary.totalGross)}</span> to{' '}
+                                            <strong className="text-emerald-950">{formatCurrency(bestUpgradeRecommendation.upgradedTotal)}</strong>!
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            const includedIds = new Set(bestUpgradeRecommendation.includedAddons.map(a => a.id));
+                                            setSelectedPackageId(bestUpgradeRecommendation.pkg.id);
+                                            setSelectedAddonIds(prev => prev.filter(id => !includedIds.has(id)));
+                                            setAppliedPackageSavings(prev => prev + bestUpgradeRecommendation.savings);
+                                            toast.success(`Upgraded to ${bestUpgradeRecommendation.pkg.name} — saved ${formatCurrency(bestUpgradeRecommendation.savings)}!`);
+                                        }}
+                                        className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs sm:text-sm shadow-md transition whitespace-nowrap flex items-center gap-2 self-start md:self-center"
+                                    >
+                                        <CheckCircle2 size={16} />
+                                        <span>Switch &amp; Save {formatCurrency(bestUpgradeRecommendation.savings)}</span>
+                                    </button>
                                 </div>
                             )}
 

@@ -1,5 +1,5 @@
 // Service Worker for BROOKSPEED Intelligent Scheduler PWA
-const CACHE_NAME = 'brookspeed-cache-v8.02.141';
+const CACHE_NAME = 'brookspeed-cache-v8.02.142';
 const STATIC_ASSETS = [
     '/',
     '/index.html',
