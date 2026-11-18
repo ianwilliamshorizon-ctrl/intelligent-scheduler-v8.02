@@ -1329,7 +1329,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-2 sm:p-4 md:p-6 overflow-y-auto">
-            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl h-[95vh] flex flex-col overflow-hidden border border-slate-300 text-slate-800">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-[96vw] xl:max-w-[1480px] h-[95vh] flex flex-col overflow-hidden border border-slate-300 text-slate-800">
                 
                 {/* LARGER, HIGHER-CONTRAST MODAL HEADER */}
                 <header className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white px-6 sm:px-8 py-5 flex flex-wrap items-center justify-between gap-4 border-b border-indigo-900 flex-shrink-0">
@@ -1438,10 +1438,12 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     {/* STEP 1: CLIENT IDENTIFICATION & VEHICLE VERIFICATION     */}
                     {/* ======================================================== */}
                     {currentStep === 1 && (
-                        <div className="space-y-6 max-w-5xl mx-auto">
+                        <div className="space-y-4 max-w-[1440px] mx-auto">
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+                                <div className="space-y-4">
 
-                            {/* 1. TOP CARD: CUSTOMER REQUIREMENT & WORK REQUESTED (NO SCROLLING REQUIRED) */}
-                            <div className="bg-white p-6 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-4">
+                            {/* 1. COLUMN 1: CUSTOMER REQUIREMENT & WORK REQUESTED */}
+                            <div className="bg-white p-4 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
                                     <div className="flex items-center gap-2.5">
                                         <div className="p-2.5 bg-indigo-100 text-indigo-700 rounded-xl">
@@ -1611,47 +1613,49 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                 </div>
                             </div>
                             
-                            {/* RECEPTIONIST SCRIPT / GUIDANCE HEADER (LARGER TYPE) */}
+                            {/* RECEPTIONIST SCRIPT / GUIDANCE HEADER (COMPACT FOR 3-COL) */}
                             {mode === 'receptionist' && (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-3">
                                     {/* What to Say */}
-                                    <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-5 shadow-sm relative">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <span className="text-xs font-black uppercase tracking-wider text-amber-900 flex items-center gap-2">
-                                                <Volume2 size={18} className="text-amber-700" />
+                                    <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-4 shadow-sm relative">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                                <Volume2 size={16} className="text-amber-700" />
                                                 [What to Say to Customer]
                                             </span>
                                             <button 
                                                 onClick={() => handleCopyScript(step1SpokenScript, 'step1-script')}
-                                                className="text-amber-800 hover:text-amber-950 px-2.5 py-1 text-xs font-bold flex items-center gap-1.5 hover:bg-amber-200 rounded-lg transition"
+                                                className="text-amber-800 hover:text-amber-950 px-2 py-1 text-[11px] font-bold flex items-center gap-1 hover:bg-amber-200 rounded-lg transition"
                                                 title="Copy script"
                                             >
-                                                {copiedScript === 'step1-script' ? <Check size={16} className="text-emerald-700" /> : <Copy size={16} />}
-                                                <span>Copy Script</span>
+                                                {copiedScript === 'step1-script' ? <Check size={14} className="text-emerald-700" /> : <Copy size={14} />}
+                                                <span>Copy</span>
                                             </button>
                                         </div>
-                                        <p className="text-base sm:text-lg italic text-amber-950 leading-relaxed font-serif">
+                                        <p className="text-sm italic text-amber-950 leading-relaxed font-serif">
                                             &ldquo;{step1SpokenScript}&rdquo;
                                         </p>
                                     </div>
 
                                     {/* Behind the Scenes Action */}
-                                    <div className="bg-blue-50/80 border-2 border-blue-200 rounded-2xl p-5 shadow-sm">
-                                        <span className="text-xs font-black uppercase tracking-wider text-blue-900 flex items-center gap-2 mb-3">
-                                            <Wrench size={18} className="text-blue-700" />
+                                    <div className="bg-blue-50/80 border-2 border-blue-200 rounded-2xl p-4 shadow-sm">
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-2">
+                                            <Wrench size={15} className="text-blue-700" />
                                             [Behind the Scenes - Action Required]
                                         </span>
-                                        <ul className="text-sm text-blue-950 space-y-2 list-disc pl-5">
-                                            <li><strong>Enter Reg below:</strong> System immediately scans DMS vehicles. If found, it automatically retrieves the client record.</li>
-                                            <li><strong>If existing:</strong> Confirm address, mobile number, and GDPR contact preferences.</li>
-                                            <li><strong>If new to system:</strong> Runs DVLA check, creates the client profile, and captures mandatory GDPR consents.</li>
+                                        <ul className="text-xs text-blue-950 space-y-1.5 list-disc pl-4">
+                                            <li><strong>Enter Reg:</strong> Scans DMS vehicles &amp; retrieves client record automatically.</li>
+                                            <li><strong>Existing:</strong> Confirm address, mobile, and GDPR preferences.</li>
+                                            <li><strong>New:</strong> Runs DVLA check, creates profile &amp; captures GDPR consent.</li>
                                         </ul>
                                     </div>
                                 </div>
                             )}
+                                </div>
 
-                            {/* PRIMARY VEHICLE REGISTRATION LOOKUP FIRST */}
-                            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                                {/* COLUMN 2: PRIMARY VEHICLE REGISTRATION LOOKUP */}
+                                <div className="space-y-4">
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-black text-slate-900 text-base flex items-center gap-2.5">
                                         <Car size={22} className="text-amber-500" />
@@ -1778,9 +1782,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     </div>
                                 )}
                             </div>
+                                </div>
 
-                            {/* CLIENT DETAILS & VERIFICATION / GDPR SECTION */}
-                            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5">
+                            {/* COLUMN 3: CLIENT DETAILS & VERIFICATION */}
+                            <div className="space-y-4">
+                            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-black text-slate-900 text-base flex items-center gap-2.5">
                                         <User size={22} className="text-indigo-600" />
@@ -1997,13 +2003,16 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         </div>
                                     </div>
                                 )}
+                            </div>
+                                </div>
+                            </div>
 
-                                {/* GDPR & COMMUNICATION CONSENT BOX (MANDATORY REQUIREMENTS) */}
-                                <div className="bg-slate-50 border-2 border-indigo-200/80 rounded-2xl p-5 space-y-4">
-                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                                {/* GDPR & COMMUNICATION CONSENT BOX (FULL-WIDTH EQUAL-SIZE CARDS) */}
+                                <div className="bg-slate-50 border-2 border-indigo-200/80 rounded-2xl p-4 space-y-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
                                         <div className="flex items-center gap-2 text-indigo-950 font-bold text-sm">
                                             <ShieldCheck size={20} className="text-indigo-600" />
-                                            <span>GDPR Compliance & Communication Preferences</span>
+                                            <span>GDPR Compliance &amp; Communication Preferences</span>
                                         </div>
                                         {mode === 'receptionist' && (
                                             <span className="text-xs text-indigo-700 italic font-serif">
@@ -2012,15 +2021,15 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 items-center">
-                                        <div>
-                                            <label className="block text-xs font-bold text-slate-700 mb-1">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-stretch">
+                                        <div className="h-full min-h-[72px] p-3 bg-white rounded-xl border border-slate-200 flex flex-col justify-center">
+                                            <label className="block text-[11px] font-bold text-slate-700 mb-1">
                                                 Preferred Channel
                                             </label>
                                             <select
                                                 value={communicationPreference}
                                                 onChange={e => setCommunicationPreference(e.target.value as any)}
-                                                className="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs bg-white font-semibold"
+                                                className="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-xs bg-slate-50 font-semibold"
                                             >
                                                 <option value="Email">Email</option>
                                                 <option value="SMS">SMS</option>
@@ -2032,54 +2041,53 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
                                         <div 
                                             onClick={() => handleConsentToggle('serviceReminder')}
-                                            className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-indigo-400 select-none"
+                                            className="h-full min-h-[72px] flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-indigo-400 select-none"
                                         >
                                             <input 
                                                 type="checkbox" 
                                                 checked={serviceReminderConsent} 
                                                 onChange={() => {}} 
-                                                className="w-4 h-4 text-indigo-600 rounded cursor-pointer" 
+                                                className="w-4 h-4 text-indigo-600 rounded cursor-pointer shrink-0" 
                                             />
-                                            <div>
-                                                <span className="text-xs font-bold text-slate-800 block">Service & MOT Reminders</span>
-                                                <span className="text-[10px] text-slate-500">Crucial safety & due-date alerts</span>
+                                            <div className="min-w-0">
+                                                <span className="text-xs font-bold text-slate-800 block leading-tight">Service &amp; MOT Reminders</span>
+                                                <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">Crucial safety &amp; due-date alerts</span>
                                             </div>
                                         </div>
 
                                         <div 
                                             onClick={() => handleConsentToggle('marketing')}
-                                            className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-indigo-400 select-none"
+                                            className="h-full min-h-[72px] flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-indigo-400 select-none"
                                         >
                                             <input 
                                                 type="checkbox" 
                                                 checked={marketingConsent} 
                                                 onChange={() => {}} 
-                                                className="w-4 h-4 text-indigo-600 rounded cursor-pointer" 
+                                                className="w-4 h-4 text-indigo-600 rounded cursor-pointer shrink-0" 
                                             />
-                                            <div>
-                                                <span className="text-xs font-bold text-slate-800 block">Marketing & Seasonal Offers</span>
-                                                <span className="text-[10px] text-slate-500">Workshop updates & clinics</span>
+                                            <div className="min-w-0">
+                                                <span className="text-xs font-bold text-slate-800 block leading-tight">Marketing &amp; Seasonal Offers</span>
+                                                <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">Workshop updates &amp; clinics</span>
                                             </div>
                                         </div>
 
                                         <div 
                                             onClick={() => handleConsentToggle('declined')}
-                                            className="flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-red-400 select-none"
+                                            className="h-full min-h-[72px] flex items-center gap-3 p-3 bg-white rounded-xl border border-slate-200 cursor-pointer hover:border-red-400 select-none"
                                         >
                                             <input 
                                                 type="checkbox" 
                                                 checked={declinedCommunication} 
                                                 onChange={() => {}} 
-                                                className="w-4 h-4 text-red-600 rounded cursor-pointer" 
+                                                className="w-4 h-4 text-red-600 rounded cursor-pointer shrink-0" 
                                             />
-                                            <div>
-                                                <span className="text-xs font-bold text-red-800 block">Declined Contact</span>
-                                                <span className="text-[10px] text-red-500">Opt out of all alerts</span>
+                                            <div className="min-w-0">
+                                                <span className="text-xs font-bold text-red-800 block leading-tight">Declined Contact</span>
+                                                <span className="text-[10px] text-red-500 block leading-tight mt-0.5">Opt out of all alerts</span>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
 
 
