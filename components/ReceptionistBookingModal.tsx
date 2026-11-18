@@ -765,17 +765,29 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
     // Smart Package Upgrade Optimizer:
     // Checks if a higher-tier compatible package (e.g. Silver or Gold) already includes
-    // one or more selected add-ons for a lower combined total than Base + Add-ons.
+    // one or more selected add-ons (or secondary selected packages) on top of a base service package
+    // for a lower combined total, while preserving any unrelated selected packages/add-ons.
     const bestUpgradeRecommendation = useMemo(() => {
-        if (!selectedPackage || isCustomManualPackage || activeAddons.length === 0) return null;
+        if (selectedPackages.length === 0 || isCustomManualPackage) return null;
 
-        const addonMatchesPackage = (addon: BookingScriptAddon, pkg: ServicePackage): boolean => {
-            const haystack = [
-                pkg.name || '',
-                pkg.description || '',
-                ...(pkg.costItems || []).map(ci => ci.description || '')
-            ].join(' ').toLowerCase();
+        const getPkgHaystack = (pkg: ServicePackage) => [
+            pkg.name || '',
+            pkg.description || '',
+            ...(pkg.costItems || []).map(ci => ci.description || '')
+        ].join(' ').toLowerCase();
 
+        const isServicePkg = (pkg: ServicePackage) =>
+            /\b(service|bronze|silver|gold|minor|interim|major|inspection)\b/i.test(pkg.name || '');
+
+        const getTierRank = (pkg: ServicePackage): number => {
+            const n = (pkg.name || '').toLowerCase();
+            if (n.includes('gold') || n.includes('major')) return 3;
+            if (n.includes('silver') || n.includes('interim')) return 2;
+            if (n.includes('bronze') || n.includes('minor')) return 1;
+            return 0;
+        };
+
+        const addonMatchesPackage = (addon: BookingScriptAddon, haystack: string): boolean => {
             const idNorm = (addon.id || '').toLowerCase();
             if (idNorm.includes('brake-fluid') && haystack.includes('brake fluid')) return true;
             if (idNorm.includes('mot') && /\bmot\b/.test(haystack)) return true;
@@ -794,31 +806,80 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
             return hits >= Math.min(2, keywords.length);
         };
 
+        const pkgIsCoveredBy = (subPkg: ServicePackage, candidateHaystack: string): boolean => {
+            const subName = (subPkg.name || '').toLowerCase();
+            if (subName.includes('brake fluid') && candidateHaystack.includes('brake fluid')) return true;
+            if (subName.includes('spark plug') && candidateHaystack.includes('spark plug')) return true;
+            if (subName.includes('coolant') && (candidateHaystack.includes('coolant') || candidateHaystack.includes('antifreeze'))) return true;
+            if (subName.includes('air con') && (candidateHaystack.includes('air con') || candidateHaystack.includes('regas'))) return true;
+            if (/\bmot\b/.test(subName) && /\bmot\b/.test(candidateHaystack)) return true;
+            return false;
+        };
+
+        const selectedIdSet = new Set(selectedPackages.map(p => p.id));
+        const baseServicePkgs = selectedPackages.filter(isServicePkg);
+        if (baseServicePkgs.length === 0) return null;
+
         let best: {
             pkg: ServicePackage;
+            replacedPackageIds: string[];
             includedAddons: BookingScriptAddon[];
             upgradedTotal: number;
             savings: number;
         } | null = null;
 
         for (const candidate of allCompatiblePackages) {
-            if (candidate.id === selectedPackage.id) continue;
+            if (selectedIdSet.has(candidate.id)) continue;
+            if (!isServicePkg(candidate)) continue;
             if (candidate.entityId && selectedEntity?.id && candidate.entityId !== selectedEntity.id) continue;
 
-            const includedAddons = activeAddons.filter(a => addonMatchesPackage(a, candidate));
-            if (includedAddons.length === 0) continue;
+            const candidateHaystack = getPkgHaystack(candidate);
+            const candidateTier = getTierRank(candidate);
 
-            const remainingAddons = activeAddons.filter(a => !includedAddons.some(inc => inc.id === a.id));
-            const upgradedTotal = (candidate.totalPrice || 0) + remainingAddons.reduce((sum, a) => sum + a.bundledPrice, 0);
+            // Candidate must legitimately upgrade at least one selected service package
+            // (higher or equal tier & price >= base service price)
+            const upgradedBaseService = baseServicePkgs.find(bp => {
+                const bpTier = getTierRank(bp);
+                const tierOk = bpTier > 0 && candidateTier > 0 ? candidateTier >= bpTier : true;
+                return tierOk && (candidate.totalPrice || 0) >= (bp.totalPrice || 0);
+            });
+            if (!upgradedBaseService) continue;
+
+            // Also find any secondary selected packages (e.g. Brake Fluid, Spark Plugs) covered by candidate
+            const secondaryCovered = selectedPackages.filter(
+                p => p.id !== upgradedBaseService.id && pkgIsCoveredBy(p, candidateHaystack)
+            );
+            const replacedPackages = [upgradedBaseService, ...secondaryCovered];
+            const replacedIds = new Set(replacedPackages.map(p => p.id));
+
+            const includedAddons = activeAddons.filter(a => addonMatchesPackage(a, candidateHaystack));
+
+            // Must actually absorb at least one selected add-on OR secondary selected package
+            if (includedAddons.length === 0 && secondaryCovered.length === 0) continue;
+
+            const keptPackagesTotal = selectedPackages
+                .filter(p => !replacedIds.has(p.id))
+                .reduce((sum, p) => sum + (p.totalPrice || 0), 0);
+            const remainingAddonsTotal = activeAddons
+                .filter(a => !includedAddons.some(inc => inc.id === a.id))
+                .reduce((sum, a) => sum + a.bundledPrice, 0);
+
+            const upgradedTotal = (candidate.totalPrice || 0) + keptPackagesTotal + remainingAddonsTotal;
             const savings = pricingSummary.totalGross - upgradedTotal;
 
             if (savings > 0.5 && (!best || savings > best.savings)) {
-                best = { pkg: candidate, includedAddons, upgradedTotal, savings };
+                best = {
+                    pkg: candidate,
+                    replacedPackageIds: Array.from(replacedIds),
+                    includedAddons,
+                    upgradedTotal,
+                    savings
+                };
             }
         }
 
         return best;
-    }, [selectedPackage, isCustomManualPackage, activeAddons, allCompatiblePackages, selectedEntity, pricingSummary.totalGross]);
+    }, [selectedPackages, isCustomManualPackage, activeAddons, allCompatiblePackages, selectedEntity, pricingSummary.totalGross]);
 
     // Prospective Estimate Number for real-time preview before commit
     const prospectiveEstimateNumber = useMemo(() => {
@@ -2817,7 +2878,17 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                             Upgrade to {bestUpgradeRecommendation.pkg.name} ({formatCurrency(bestUpgradeRecommendation.pkg.totalPrice || 0)})
                                         </h4>
                                         <p className="text-xs sm:text-sm text-emerald-900">
-                                            Already includes <strong>{bestUpgradeRecommendation.includedAddons.map(a => a.name).join(' &amp; ')}</strong> — total drops from{' '}
+                                            Already includes{' '}
+                                            <strong>
+                                                {[
+                                                    ...selectedPackages
+                                                        .filter(p => bestUpgradeRecommendation.replacedPackageIds.includes(p.id))
+                                                        .slice(1)
+                                                        .map(p => p.name),
+                                                    ...bestUpgradeRecommendation.includedAddons.map(a => a.name)
+                                                ].join(' & ') || 'your selected service items'}
+                                            </strong>{' '}
+                                            — total drops from{' '}
                                             <span className="line-through font-semibold">{formatCurrency(pricingSummary.totalGross)}</span> to{' '}
                                             <strong className="text-emerald-950">{formatCurrency(bestUpgradeRecommendation.upgradedTotal)}</strong>!
                                         </p>
@@ -2825,8 +2896,12 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     <button
                                         type="button"
                                         onClick={() => {
+                                            const replacedSet = new Set(bestUpgradeRecommendation.replacedPackageIds);
                                             const includedIds = new Set(bestUpgradeRecommendation.includedAddons.map(a => a.id));
-                                            setSelectedPackageId(bestUpgradeRecommendation.pkg.id);
+                                            setSelectedPackageIds(prev => [
+                                                ...prev.filter(id => !replacedSet.has(id)),
+                                                bestUpgradeRecommendation.pkg.id
+                                            ]);
                                             setSelectedAddonIds(prev => prev.filter(id => !includedIds.has(id)));
                                             setAppliedPackageSavings(prev => prev + bestUpgradeRecommendation.savings);
                                             toast.success(`Upgraded to ${bestUpgradeRecommendation.pkg.name} — saved ${formatCurrency(bestUpgradeRecommendation.savings)}!`);
