@@ -1439,8 +1439,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                     {/* ======================================================== */}
                     {currentStep === 1 && (
                         <div className="space-y-4 max-w-[1440px] mx-auto">
-                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
-                                <div className="space-y-4">
+                            <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
+                                <div className="xl:col-span-5 space-y-4">
 
                             {/* 1. COLUMN 1: CUSTOMER REQUIREMENT & WORK REQUESTED */}
                             <div className="bg-white p-4 rounded-2xl border-2 border-indigo-200/90 shadow-sm space-y-3">
@@ -1612,20 +1612,23 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     )}
                                 </div>
                             </div>
-                            
-                            {/* RECEPTIONIST SCRIPT / GUIDANCE HEADER (COMPACT FOR 3-COL) */}
+                                </div>
+
+                                {/* COLUMN 2: SCRIPT + VEHICLE DATA + CUSTOMER DATA STACKED */}
+                                <div className="xl:col-span-7 space-y-4">
+                            {/* RECEPTIONIST SCRIPT / GUIDANCE HEADER AT TOP OF COL 2 */}
                             {mode === 'receptionist' && (
-                                <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                     {/* What to Say */}
                                     <div className="bg-amber-50/80 border-2 border-amber-300 rounded-2xl p-4 shadow-sm relative">
-                                        <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center justify-between mb-1.5">
                                             <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
                                                 <Volume2 size={16} className="text-amber-700" />
                                                 [What to Say to Customer]
                                             </span>
                                             <button 
                                                 onClick={() => handleCopyScript(step1SpokenScript, 'step1-script')}
-                                                className="text-amber-800 hover:text-amber-950 px-2 py-1 text-[11px] font-bold flex items-center gap-1 hover:bg-amber-200 rounded-lg transition"
+                                                className="text-amber-800 hover:text-amber-950 px-2 py-0.5 text-[11px] font-bold flex items-center gap-1 hover:bg-amber-200 rounded-lg transition"
                                                 title="Copy script"
                                             >
                                                 {copiedScript === 'step1-script' ? <Check size={14} className="text-emerald-700" /> : <Copy size={14} />}
@@ -1639,11 +1642,11 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
 
                                     {/* Behind the Scenes Action */}
                                     <div className="bg-blue-50/80 border-2 border-blue-200 rounded-2xl p-4 shadow-sm">
-                                        <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-2">
+                                        <span className="text-[11px] font-black uppercase tracking-wider text-blue-900 flex items-center gap-1.5 mb-1.5">
                                             <Wrench size={15} className="text-blue-700" />
                                             [Behind the Scenes - Action Required]
                                         </span>
-                                        <ul className="text-xs text-blue-950 space-y-1.5 list-disc pl-4">
+                                        <ul className="text-xs text-blue-950 space-y-1 list-disc pl-4">
                                             <li><strong>Enter Reg:</strong> Scans DMS vehicles &amp; retrieves client record automatically.</li>
                                             <li><strong>Existing:</strong> Confirm address, mobile, and GDPR preferences.</li>
                                             <li><strong>New:</strong> Runs DVLA check, creates profile &amp; captures GDPR consent.</li>
@@ -1651,10 +1654,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     </div>
                                 </div>
                             )}
-                                </div>
 
-                                {/* COLUMN 2: PRIMARY VEHICLE REGISTRATION LOOKUP */}
-                                <div className="space-y-4">
                             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-black text-slate-900 text-base flex items-center gap-2.5">
@@ -1688,17 +1688,6 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                         <Search size={18} />
                                         {isVrmLoading ? 'Looking up Vehicle & Client...' : 'Lookup Vehicle'}
                                     </button>
-
-                                    <div className="flex items-center gap-2.5 ml-auto">
-                                        <label className="text-sm font-bold text-slate-700">Current Mileage:</label>
-                                        <input 
-                                            type="number" 
-                                            value={currentMileage} 
-                                            onChange={e => setCurrentMileage(parseInt(e.target.value, 10) || 0)}
-                                            className="w-32 px-3 py-2 border border-slate-300 rounded-xl text-sm font-mono font-bold text-right"
-                                        />
-                                        <span className="text-sm text-slate-500 font-bold">miles</span>
-                                    </div>
                                 </div>
 
                                 {vrmLookupError && (
@@ -1782,10 +1771,8 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
                                     </div>
                                 )}
                             </div>
-                                </div>
 
-                            {/* COLUMN 3: CLIENT DETAILS & VERIFICATION */}
-                            <div className="space-y-4">
+                            {/* STACKED IN COLUMN 2: CLIENT DETAILS & VERIFICATION */}
                             <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4">
                                 <div className="flex items-center justify-between">
                                     <h3 className="font-black text-slate-900 text-base flex items-center gap-2.5">
