@@ -990,8 +990,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         .get();
 
       if (!existingInquirySnap.empty) {
-        logger.info(`Inquiry for internetMessageId ${internetMessageId} already exists. Marking email as read to prevent cross-mailbox duplicates.`);
-        await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+        logger.info(`Inquiry for internetMessageId ${internetMessageId} already exists. Skipping without altering mailbox read state.`);
         continue;
       }
 
@@ -1002,9 +1001,7 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         .get();
 
       if (!legacyInquirySnap.empty) {
-        logger.info(`Inquiry for message ID ${messageId} already exists. Marking email as read anyway.`);
-        // Mark as read to clear from the unread queue
-        await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
+        logger.info(`Inquiry for message ID ${messageId} already exists. Skipping without altering mailbox read state.`);
         continue;
       }
 
@@ -1288,7 +1285,6 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         const isDuplicate = existingLogs.some(log => log.id === messageId);
         if (isDuplicate) {
           logger.info(`Reply for message ID ${messageId} is already logged in Inquiry ${matchedInquiryId}. Skipping.`);
-          await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
           processedCount++;
           continue;
         }
@@ -1326,7 +1322,6 @@ async function performEmailSync(microsoftClientId, microsoftClientSecret, micros
         await db.collection("brooks_inquiries").doc(matchedInquiryId).update(updatePayload);
         
         logger.info(`Updated existing Inquiry Card: ${matchedInquiryId} with new reply (isOutbound: ${isOutbound})`);
-        await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
         processedCount++;
         continue;
       }
@@ -1578,9 +1573,6 @@ ${textBody}
 
       const docRef = await db.collection("brooks_inquiries").add(newInquiry);
       logger.info(`Successfully created Inquiry Card: ${docRef.id} for message ID ${messageId}`);
-
-      // 4. Mark the email as read in Microsoft 365 mailbox
-      await markEmailAsRead(accessToken, microsoftEmailSender, messageId);
 
       processedCount++;
     } catch (msgErr) {
