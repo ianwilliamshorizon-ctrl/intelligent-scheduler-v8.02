@@ -13,7 +13,9 @@ import { formatDate, dateStringToDate } from './core/utils/dateUtils';
 import { calculateJobPartsStatus } from './core/utils/jobUtils';
 import useModalState from './core/hooks/useModalState';
 import { useWorkshopActions } from './core/hooks/useWorkshopActions';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { getEstimateDriftSummary, recordEstimateSentVersion, createEstimateOverrideRecord, formatEstimateChangeNotice, EstimateDriftSummary } from './core/utils/estimateVersioning';
+import { sendOutboundEmail } from './core/services/emailService';
+import { CheckCircle2, XCircle, AlertTriangle, Send, ShieldCheck } from 'lucide-react';
 
 // Layout & Core Components
 import MainLayout from './components/MainLayout';
@@ -112,11 +114,16 @@ const AuthenticatedApp = () => {
         });
     };
 
-    const handleGenerateInvoice = (jobId: string) => {
-        const job = (jobs || []).find(j => j.id === jobId);
-        if (!job) return;
+    const [invoiceDriftModal, setInvoiceDriftModal] = useState<{
+        job: T.Job;
+        estimate: T.Estimate;
+        drift: EstimateDriftSummary;
+        emailBody: string;
+        overrideReason: string;
+        isBusy: boolean;
+    } | null>(null);
 
-        const linkedEstimate = (estimates || []).find(e => e.id === job.estimateId || e.jobId === job.id);
+    const proceedToInvoiceForm = (job: T.Job, linkedEstimate?: T.Estimate) => {
         const jobPurchaseOrders = (purchaseOrders || []).filter(po => po.jobId === job.id || (job.purchaseOrderIds || []).includes(po.id));
         const currentPartsStatus = calculateJobPartsStatus(linkedEstimate || null, jobPurchaseOrders);
 
@@ -126,6 +133,29 @@ const AuthenticatedApp = () => {
         }
 
         setters.setInvoiceFormModal({ isOpen: true, job });
+    };
+
+    const handleGenerateInvoice = (jobId: string) => {
+        const job = (jobs || []).find(j => j.id === jobId);
+        if (!job) return;
+
+        const linkedEstimate = (estimates || []).find(e => e.id === job.estimateId || e.jobId === job.id);
+        if (linkedEstimate) {
+            const drift = getEstimateDriftSummary(linkedEstimate, taxRates || []);
+            if (drift.hasDrift) {
+                setInvoiceDriftModal({
+                    job,
+                    estimate: linkedEstimate,
+                    drift,
+                    emailBody: formatEstimateChangeNotice(linkedEstimate, drift),
+                    overrideReason: '',
+                    isBusy: false,
+                });
+                return;
+            }
+        }
+
+        proceedToInvoiceForm(job, linkedEstimate);
     };
 
     const workshopActions = useWorkshopActions(handleGenerateInvoice);
@@ -602,6 +632,189 @@ const AuthenticatedApp = () => {
                         onRestoreFromSnapshot={handleRestoreFromSnapshot}
                     />
                 )}
+                {invoiceDriftModal && (() => {
+                    const { job, estimate, drift, emailBody, overrideReason, isBusy } = invoiceDriftModal;
+                    const customer = (customers || []).find(c => c.id === estimate.customerId || c.id === job.customerId);
+                    const vehicle = (vehicles || []).find(v => v.id === estimate.vehicleId || v.id === job.vehicleId);
+                    const entity = (businessEntities || []).find(e => e.id === estimate.entityId || e.id === job.entityId);
+                    const deltaSign = drift.unexplainedDelta >= 0 ? '+' : '';
+
+                    const handleSendChangeNoticeAndInvoice = async () => {
+                        if (!customer?.email) {
+                            toast.error('Customer has no email address on file. Use Verbal Authorization or update the customer record first.');
+                            return;
+                        }
+                        setInvoiceDriftModal(prev => prev ? { ...prev, isBusy: true } : null);
+                        try {
+                            await sendOutboundEmail({
+                                to: customer.email,
+                                fromName: entity?.name || 'Brookspeed',
+                                fromEmail: entity?.email || 'workshop@brookspeed.com',
+                                subject: `Updated Estimate Notice #${estimate.estimateNumber} (${vehicle?.registration || 'Vehicle'})`,
+                                body: emailBody,
+                            });
+                            const updatedEstimate = recordEstimateSentVersion(estimate, currentUser?.id, taxRates || []);
+                            await data.saveRecord('estimates', updatedEstimate);
+                            toast.success(`Change notice sent to ${customer.email}. Estimate bumped to v${updatedEstimate.version}.`);
+                            setInvoiceDriftModal(null);
+                            proceedToInvoiceForm(job, updatedEstimate);
+                        } catch (err: any) {
+                            toast.error(`Failed to send change notice: ${err?.message || 'Unknown error'}`);
+                            setInvoiceDriftModal(prev => prev ? { ...prev, isBusy: false } : null);
+                        }
+                    };
+
+                    const handleRecordVerbalOverrideAndInvoice = async (source: 'verbal_approval' | 'manual_override') => {
+                        setInvoiceDriftModal(prev => prev ? { ...prev, isBusy: true } : null);
+                        try {
+                            const reason = overrideReason.trim() || (
+                                source === 'verbal_approval'
+                                    ? 'Client approved additional work verbally / at desk prior to invoicing'
+                                    : 'Staff bypassed estimate drift warning at invoice creation'
+                            );
+                            const overrideRec = createEstimateOverrideRecord(
+                                currentUser?.id || 'system',
+                                source,
+                                reason,
+                                drift.unexplainedDelta
+                            );
+                            const updatedEstimate: T.Estimate = {
+                                ...estimate,
+                                authorizedOverrides: [...(estimate.authorizedOverrides || []), overrideRec],
+                                hasUnnotifiedChanges: false,
+                            };
+                            await data.saveRecord('estimates', updatedEstimate);
+                            if (source === 'manual_override') {
+                                toast.warning('Invoiced with audit-logged staff override.');
+                            } else {
+                                toast.success('Client authorization recorded on estimate.');
+                            }
+                            setInvoiceDriftModal(null);
+                            proceedToInvoiceForm(job, updatedEstimate);
+                        } catch (err: any) {
+                            toast.error(`Failed to save authorization: ${err?.message || 'Unknown error'}`);
+                            setInvoiceDriftModal(prev => prev ? { ...prev, isBusy: false } : null);
+                        }
+                    };
+
+                    return (
+                        <div className="fixed inset-0 bg-gray-900/70 z-[90] flex justify-center items-center p-4">
+                            <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-amber-200">
+                                <div className="p-4 bg-amber-50 border-b border-amber-200 flex items-center justify-between">
+                                    <div className="flex items-center gap-2.5 text-amber-900">
+                                        <AlertTriangle className="text-amber-600 shrink-0" size={22} />
+                                        <div>
+                                            <h3 className="font-bold text-base">Estimate Changed Since Last Sent (v{drift.currentVersion})</h3>
+                                            <p className="text-xs text-amber-800">
+                                                Estimate #{estimate.estimateNumber} • {vehicle?.registration || ''} • {customer ? `${customer.forename} ${customer.surname}` : ''}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => !isBusy && setInvoiceDriftModal(null)}
+                                        className="text-gray-500 hover:text-gray-800 text-sm font-semibold px-2 py-1"
+                                        disabled={isBusy}
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+
+                                <div className="p-5 space-y-4 max-h-[75vh] overflow-y-auto text-sm">
+                                    <div className="grid grid-cols-3 gap-3 bg-gray-50 p-3 rounded-lg border text-center">
+                                        <div>
+                                            <div className="text-[11px] uppercase text-gray-500 font-semibold">Authorized Total</div>
+                                            <div className="text-base font-bold text-gray-800">£{drift.authorizedTotalGross.toFixed(2)}</div>
+                                            <div className="text-[11px] text-gray-500">
+                                                Sent v{drift.currentVersion} (£{(drift.latestSent?.totalGross || 0).toFixed(2)})
+                                                {drift.authorizedOverridesTotal !== 0 && ` + Overrides (£${drift.authorizedOverridesTotal.toFixed(2)})`}
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[11px] uppercase text-gray-500 font-semibold">Current Job / Est.</div>
+                                            <div className="text-base font-bold text-indigo-700">£{drift.currentTotalGross.toFixed(2)}</div>
+                                            <div className="text-[11px] text-gray-500">inc. VAT</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-[11px] uppercase text-gray-500 font-semibold">Unnotified Drift</div>
+                                            <div className={`text-base font-bold ${drift.unexplainedDelta > 0 ? 'text-red-600' : 'text-amber-700'}`}>
+                                                {deltaSign}£{drift.unexplainedDelta.toFixed(2)}
+                                            </div>
+                                            <div className="text-[11px] text-gray-500">vs authorized</div>
+                                        </div>
+                                    </div>
+
+                                    {(drift.diff.added.length > 0 || drift.diff.removed.length > 0 || drift.diff.modified.length > 0) && (
+                                        <div className="border rounded-lg p-3 bg-white space-y-1.5 text-xs">
+                                            <div className="font-semibold text-gray-700">Detected Line Changes:</div>
+                                            {drift.diff.added.map((l, idx) => (
+                                                <div key={`add-${idx}`} className="text-green-700">+ Added: {l.description} ({l.quantity} × £{Number(l.unitPrice || 0).toFixed(2)} net)</div>
+                                            ))}
+                                            {drift.diff.modified.map((m, idx) => (
+                                                <div key={`mod-${idx}`} className="text-amber-800">~ Changed: {m.item.description} (Qty {m.prevQuantity}→{m.item.quantity}, Unit £{m.prevUnitPrice.toFixed(2)}→£{Number(m.item.unitPrice || 0).toFixed(2)})</div>
+                                            ))}
+                                            {drift.diff.removed.map((l, idx) => (
+                                                <div key={`rem-${idx}`} className="text-red-700">- Removed: {l.description}</div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                            Client Change Notice Email Preview ({customer?.email || 'No email on file'}):
+                                        </label>
+                                        <textarea
+                                            value={emailBody}
+                                            onChange={e => setInvoiceDriftModal(prev => prev ? { ...prev, emailBody: e.target.value } : null)}
+                                            rows={5}
+                                            className="w-full p-2.5 border rounded-lg text-xs font-mono bg-gray-50 focus:bg-white"
+                                            disabled={isBusy}
+                                        />
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                                            Check-In / Verbal Approval Note (optional, required for audit clarity if not emailing):
+                                        </label>
+                                        <input
+                                            type="text"
+                                            value={overrideReason}
+                                            onChange={e => setInvoiceDriftModal(prev => prev ? { ...prev, overrideReason: e.target.value } : null)}
+                                            placeholder="e.g. Client requested brake fluid flush at drop-off / approved by phone"
+                                            className="w-full p-2 border rounded-lg text-xs"
+                                            disabled={isBusy}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="p-4 bg-gray-50 border-t flex flex-wrap justify-between items-center gap-2">
+                                    <button
+                                        onClick={() => handleRecordVerbalOverrideAndInvoice('manual_override')}
+                                        disabled={isBusy}
+                                        className="px-3 py-2 text-xs font-semibold text-gray-600 hover:text-gray-900 hover:bg-gray-200 rounded-lg disabled:opacity-50"
+                                    >
+                                        Override & Invoice Anyway
+                                    </button>
+                                    <div className="flex flex-wrap gap-2">
+                                        <button
+                                            onClick={() => handleRecordVerbalOverrideAndInvoice('verbal_approval')}
+                                            disabled={isBusy}
+                                            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            <ShieldCheck size={15} /> Record Verbal / Check-In Approval
+                                        </button>
+                                        <button
+                                            onClick={handleSendChangeNoticeAndInvoice}
+                                            disabled={isBusy || !customer?.email}
+                                            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                        >
+                                            <Send size={15} /> {isBusy ? 'Sending...' : `Send Change Notice & Bump to v${drift.currentVersion + 1}`}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })()}
                  <HelpCentre open={isHelpCentreOpen} onClose={() => setIsHelpCentreOpen(false)} />
                 <ToastContainer aria-label="Notifications" />
             </MainLayout>

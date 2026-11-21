@@ -466,6 +466,27 @@ export interface EstimateLineItem {
     optionLabel?: string;          // e.g. "Option 1", "Option 2"
 }
 
+export interface EstimateVersionSnapshot {
+    version: number;
+    sentAt: string;
+    sentByUserId?: string;
+    totalNet: number;
+    totalVat: number;
+    totalGross: number;
+    lineItems: EstimateLineItem[];
+    approvedAt?: string;
+}
+
+export interface EstimateOverrideRecord {
+    id: string;
+    timestamp: string;
+    userId: string;
+    source: 'check_in' | 'verbal_approval' | 'manual_override';
+    reason: string;
+    addedDescription?: string;
+    deltaGross: number;
+}
+
 export interface Estimate {
     id: string;
     estimateNumber?: string;
@@ -485,6 +506,10 @@ export interface Estimate {
     discountCodeId?: string;
     hasNewReply?: boolean;
     requestedDate?: string;
+    version?: number;
+    sentHistory?: EstimateVersionSnapshot[];
+    authorizedOverrides?: EstimateOverrideRecord[];
+    hasUnnotifiedChanges?: boolean;
 }
 
 export interface PrintOptions {

@@ -7,6 +7,7 @@ import { generateCustomerId } from '../core/utils/customerUtils';
 import { ModalState, ModalSetters } from '../core/hooks/useModalState';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { sendOutboundEmail } from '../core/services/emailService';
+import { createEstimateOverrideRecord } from '../core/utils/estimateVersioning';
 
 // Core Modal Components (Always needed or lightweight)
 import ConfirmationModal from './ConfirmationModal';
@@ -610,7 +611,6 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         vehicles={data.vehicles}
                         customers={data.customers}
                         servicePackages={data.servicePackages}
-                        setServicePackages={data.setServicePackages}
                         defaultDate={formatDate(modals.smartCreateDefaultDate)}
                         initialPrompt={modals.smartCreateInitialPrompt}
                         inquiryId={modals.smartCreateInquiryId}
@@ -1409,6 +1409,25 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         isOpen={!!modals.checkInJob}
                         onClose={() => setters.setCheckInJob(null)}
                         onSave={(updatedJob) => handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs')}
+                        onAuthorizeCheckInExtra={async (updatedJob, description, deltaGross) => {
+                            const linkedEst = (data.estimates || []).find(
+                                e => e.id === updatedJob.estimateId || e.jobId === updatedJob.id
+                            );
+                            if (linkedEst) {
+                                const ov = createEstimateOverrideRecord(
+                                    currentUser.id,
+                                    'check_in',
+                                    `Authorized at vehicle check-in: ${description}`,
+                                    deltaGross,
+                                    description
+                                );
+                                const nextEst: T.Estimate = {
+                                    ...linkedEst,
+                                    authorizedOverrides: [...(linkedEst.authorizedOverrides || []), ov]
+                                };
+                                await handleSaveItem(data.setEstimates, nextEst, 'brooks_estimates');
+                            }
+                        }}
                         job={modals.checkInJob}
                     />
                 </ModalSuspense>
@@ -1533,7 +1552,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             if (estimateData) {
                                 await handleSaveItem(data.setEstimates, estimateData, 'brooks_estimates');
                                 if (estimateData.estimateNumber && estimateData.id !== estimateData.estimateNumber) {
-                                    await saveDocument('brooks_estimates', { ...estimateData, id: estimateData.estimateNumber });
+                                    await handleSaveItem(data.setEstimates, { ...estimateData, id: estimateData.estimateNumber }, 'brooks_estimates');
                                 }
                                 await workshopActions.syncPurchaseOrdersFromEstimate(estimateData, { forceNew: true });
                             }
@@ -1546,7 +1565,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                             if (estimateData) {
                                 await handleSaveItem(data.setEstimates, estimateData, 'brooks_estimates');
                                 if (estimateData.estimateNumber && estimateData.id !== estimateData.estimateNumber) {
-                                    await saveDocument('brooks_estimates', { ...estimateData, id: estimateData.estimateNumber });
+                                    await handleSaveItem(data.setEstimates, { ...estimateData, id: estimateData.estimateNumber }, 'brooks_estimates');
                                 }
                                 await workshopActions.syncPurchaseOrdersFromEstimate(estimateData, { forceNew: true });
                             }

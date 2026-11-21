@@ -18,6 +18,7 @@ import { usePrint } from '../core/hooks/usePrint';
 import { useData } from '../core/state/DataContext';
 import { BookingCalendarView } from './BookingCalendarView';
 import { getDisplayDate } from './estimates/EstimateShared';
+import { recordEstimateSentVersion } from '../core/utils/estimateVersioning';
 import { PrintableEstimate } from './estimates/PrintableEstimate';
 import { CustomerServicePackage, SelectableEstimateItemRow } from './estimates/CustomerViewComponents';
 import AsyncImage from './AsyncImage';
@@ -434,7 +435,8 @@ const EstimateViewModal: React.FC<EstimateViewModalProps> = ({
                 subject: subject,
                 body: body
             });
-            onEmailSuccess({ ...estimate, status: 'Sent' });
+            const versionedEstimate = recordEstimateSentVersion(estimate, undefined, taxRates);
+            onEmailSuccess(versionedEstimate);
             setIsEmailing(false);
             onClose(); // Close the modal back to the estimate list
         } catch (error: any) {

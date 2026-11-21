@@ -28,6 +28,8 @@ import SpeechToTextButton from './shared/SpeechToTextButton';
 import { findBestVoice, prepareTextForSpeech } from '../core/utils/speechUtils';
 import { useApp } from '../core/state/AppContext';
 import { useData } from '../core/state/DataContext';
+import { getEstimateDriftSummary, createEstimateOverrideRecord } from '../core/utils/estimateVersioning';
+import { ShieldCheck, AlertTriangle } from 'lucide-react';
 import AsyncImage from './AsyncImage';
 import AsyncMedia from './AsyncMedia';
 
@@ -1183,7 +1185,59 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
             title={formData.id ? `Edit Estimate #${formData.estimateNumber}` : 'Create New Estimate'} 
             maxWidth="max-w-screen-2xl"
         >
-            <div className="mb-4 flex justify-end">
+            <div className="mb-4 flex flex-wrap justify-between items-center gap-3">
+                {(() => {
+                    const drift = getEstimateDriftSummary(formData as Estimate, taxRates || []);
+                    if (drift.isVersionSecured && drift.hasDrift) {
+                        const sign = drift.unexplainedDelta >= 0 ? '+' : '';
+                        return (
+                            <div className="flex flex-wrap items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs">
+                                <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+                                <span className="font-semibold">
+                                    Drift {sign}£{drift.unexplainedDelta.toFixed(2)} vs v{drift.currentVersion} (Sent)
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        const rec = createEstimateOverrideRecord(
+                                            currentUser?.id || 'system',
+                                            'verbal_approval',
+                                            'Authorized verbally / at desk via Estimate Editor',
+                                            drift.unexplainedDelta
+                                        );
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            authorizedOverrides: [...(prev.authorizedOverrides || []), rec],
+                                            hasUnnotifiedChanges: false,
+                                        }));
+                                        toast.success('Verbal/desk authorization recorded on estimate.');
+                                    }}
+                                    className="ml-1 px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+                                >
+                                    Authorize Verbal/Desk Override
+                                </button>
+                            </div>
+                        );
+                    }
+                    if (drift.isVersionSecured) {
+                        return (
+                            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                                <ShieldCheck size={15} className="text-emerald-600 shrink-0" />
+                                <span>v{drift.currentVersion} • Sent & Secured</span>
+                                {(formData.authorizedOverrides?.length || 0) > 0 && (
+                                    <span className="text-emerald-700 font-normal">
+                                        ({formData.authorizedOverrides!.length} check-in/verbal override{formData.authorizedOverrides!.length > 1 ? 's' : ''})
+                                    </span>
+                                )}
+                            </div>
+                        );
+                    }
+                    return (
+                        <div className="px-3 py-1.5 rounded-lg bg-gray-100 border border-gray-200 text-gray-600 text-xs font-medium">
+                            Draft (v{drift.currentVersion} • Not Yet Sent)
+                        </div>
+                    );
+                })()}
                 <button 
                     type="button"
                     onClick={() => setIsAssistantOpen(true)}

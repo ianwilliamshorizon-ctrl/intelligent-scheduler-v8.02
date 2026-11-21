@@ -27,13 +27,17 @@ interface CheckInModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (updatedJob: Job) => void;
+    onAuthorizeCheckInExtra?: (job: Job, description: string, deltaGross: number) => Promise<void> | void;
     job: Job | null;
 }
 
-const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, job }) => {
+const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, onAuthorizeCheckInExtra, job }) => {
     const [keyNumber, setKeyNumber] = useState<string>('');
     const [mileage, setMileage] = useState<string>('');
     const [photos, setPhotos] = useState<TempCheckInPhoto[]>([]);
+    const [extraWorkAuthorized, setExtraWorkAuthorized] = useState<boolean>(false);
+    const [extraWorkDescription, setExtraWorkDescription] = useState<string>('');
+    const [extraWorkGross, setExtraWorkGross] = useState<string>('');
     const cameraInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
     const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -45,6 +49,9 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
             setKeyNumber(job.keyNumber?.toString() || '');
             setMileage(job.mileage?.toString() || '');
             setPhotos(job.checkInPhotos || []);
+            setExtraWorkAuthorized(false);
+            setExtraWorkDescription('');
+            setExtraWorkGross('');
         }
     }, [job]);
 
@@ -106,16 +113,28 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
             }
         }
 
+        const trimmedExtra = extraWorkDescription.trim();
+        const extraAmount = parseFloat(extraWorkGross) || 0;
+        const extraNoteLine = (extraWorkAuthorized && trimmedExtra)
+            ? `[Check-In Extra Authorized: ${trimmedExtra}${extraAmount > 0 ? ` (+£${extraAmount.toFixed(2)} inc VAT)` : ''}]`
+            : '';
+
         const updatedJob: Job = {
             ...job,
             keyNumber: keyNumber || undefined,
             mileage: mileage ? parseInt(mileage, 10) : undefined,
             checkInPhotos: finalPhotos,
-            vehicleStatus: 'On Site'
+            vehicleStatus: 'On Site',
+            notes: extraNoteLine
+                ? (job.notes ? `${job.notes}\n${extraNoteLine}` : extraNoteLine)
+                : job.notes
         };
         console.log("[CheckIn] Saving job...", updatedJob);
         try {
             await onSave(updatedJob);
+            if (extraWorkAuthorized && trimmedExtra && onAuthorizeCheckInExtra) {
+                await onAuthorizeCheckInExtra(updatedJob, trimmedExtra, extraAmount);
+            }
             onClose();
         } catch (err) {
             console.error("[CheckIn] Save error:", err);
@@ -237,6 +256,40 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, jo
                         </div>
                     </div>
                     
+                    {/* Additional Work Authorized at Drop-Off (Estimate Override) */}
+                    <div className="p-3.5 rounded-2xl border border-amber-200 bg-amber-50/70 space-y-2.5">
+                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={extraWorkAuthorized}
+                                onChange={e => setExtraWorkAuthorized(e.target.checked)}
+                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                            />
+                            <span className="text-xs font-bold text-amber-950">
+                                Client requested additional service/package at Check-In (records authorized override)
+                            </span>
+                        </label>
+                        {extraWorkAuthorized && (
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                                <input
+                                    type="text"
+                                    value={extraWorkDescription}
+                                    onChange={e => setExtraWorkDescription(e.target.value)}
+                                    placeholder="Extra work requested (e.g. MOT + Wipers)"
+                                    className="sm:col-span-2 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-medium"
+                                />
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={extraWorkGross}
+                                    onChange={e => setExtraWorkGross(e.target.value)}
+                                    placeholder="Extra £ inc VAT"
+                                    className="px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-mono font-bold"
+                                />
+                            </div>
+                        )}
+                    </div>
+
                     {/* Condition Media (Photos / Videos) */}
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">

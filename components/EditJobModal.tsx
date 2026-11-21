@@ -25,6 +25,8 @@ import InspectionChecklist from './InspectionChecklist';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
 import { useDebouncedSave } from '../core/hooks/useDebouncedSave';
 import { calculateJobPartsStatus, calculateJobStatus } from '../core/utils/jobUtils';
+import { getEstimateDriftSummary, createEstimateOverrideRecord } from '../core/utils/estimateVersioning';
+import { ShieldCheck as ShieldCheckIcon, AlertTriangle as AlertTriangleIcon } from 'lucide-react';
 import { MOTBookingModal } from './MOTBookingModal';
 import { TIME_SEGMENTS } from '../constants';
 import { generateJobId } from '../core/utils/numberGenerators';
@@ -1150,7 +1152,60 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                         </div>
                         <div className="bg-white border-x border-b border-gray-200 rounded-b-lg shadow-sm flex-grow p-4">
                             {activeTab === 'estimates' && (
-                                <JobEstimateTab
+                                <>
+                                    {editableEstimate && (() => {
+                                        const drift = getEstimateDriftSummary(editableEstimate, safeTaxRates);
+                                        if (drift.isVersionSecured && drift.hasDrift) {
+                                            const sign = drift.unexplainedDelta >= 0 ? '+' : '';
+                                            return (
+                                                <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-xs">
+                                                    <div className="flex items-center gap-2">
+                                                        <AlertTriangleIcon size={16} className="text-amber-600 shrink-0" />
+                                                        <span className="font-semibold">
+                                                            Estimate Drift: {sign}£{drift.unexplainedDelta.toFixed(2)} vs v{drift.currentVersion} (Sent £{(drift.latestSent?.totalGross || 0).toFixed(2)})
+                                                        </span>
+                                                    </div>
+                                                    {!isReadOnly && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const rec = createEstimateOverrideRecord(
+                                                                    currentUser?.id || 'system',
+                                                                    'verbal_approval',
+                                                                    'Authorized verbally / at desk via Job Estimate Tab',
+                                                                    drift.unexplainedDelta
+                                                                );
+                                                                setEditableEstimate(prev => prev ? {
+                                                                    ...prev,
+                                                                    authorizedOverrides: [...(prev.authorizedOverrides || []), rec],
+                                                                    hasUnnotifiedChanges: false,
+                                                                } : null);
+                                                                toast.success('Verbal/desk authorization recorded on estimate.');
+                                                            }}
+                                                            className="px-2.5 py-1 rounded bg-emerald-600 text-white font-semibold hover:bg-emerald-700"
+                                                        >
+                                                            Authorize Verbal/Desk Override
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        if (drift.isVersionSecured) {
+                                            return (
+                                                <div className="mb-3 flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold">
+                                                    <ShieldCheckIcon size={15} className="text-emerald-600 shrink-0" />
+                                                    <span>Estimate v{drift.currentVersion} • Sent & Secured</span>
+                                                    {(editableEstimate.authorizedOverrides?.length || 0) > 0 && (
+                                                        <span className="text-emerald-700 font-normal">
+                                                            ({editableEstimate.authorizedOverrides!.length} check-in/verbal override{editableEstimate.authorizedOverrides!.length > 1 ? 's' : ''})
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
+                                    <JobEstimateTab
                                     key={poStatusKey}
                                     partsStatus={editableJob.partsStatus || 'Not Required'}
                                     purchaseOrderIds={editableJob.purchaseOrderIds || []}
@@ -1195,6 +1250,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                                     isRaisingPOs={isRaisingPOs}
                                     onCreatePackage={handleCreatePackage}
                                 />
+                                </>
                             )}
                              {activeTab === 'inspection' && (
                                 <div className="space-y-8">
