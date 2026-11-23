@@ -1,20 +1,23 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Job, CheckInPhoto } from '../types';
-import { 
-    X, 
-    Save, 
-    KeyRound, 
-    Camera, 
-    Trash2, 
-    Plus, 
-    Upload, 
-    Film, 
-    Gauge, 
-    Car, 
-    CheckCircle2, 
-    Clock 
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Job, CheckInPhoto, ServicePackage, TaxRate } from '../types';
+import {
+    X,
+    Save,
+    KeyRound,
+    Camera,
+    Trash2,
+    Plus,
+    Upload,
+    Film,
+    Gauge,
+    Car,
+    CheckCircle2,
+    Clock,
+    Wrench,
+    Package
 } from 'lucide-react';
 import { saveImage } from '../utils/imageStore';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
 import AsyncMedia from './AsyncMedia';
 import MediaLightbox from './MediaLightbox';
 
@@ -23,18 +26,43 @@ interface TempCheckInPhoto extends CheckInPhoto {
     file?: File;
 }
 
+export interface CheckInAdditions {
+    packages: ServicePackage[];
+    checks: string[];
+    customExtra?: {
+        description: string;
+        deltaGross: number;
+    };
+}
+
 interface CheckInModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSave: (updatedJob: Job) => void;
     onAuthorizeCheckInExtra?: (job: Job, description: string, deltaGross: number) => Promise<void> | void;
+    onCheckInAdditions?: (job: Job, additions: CheckInAdditions) => Promise<void> | void;
+    servicePackages?: ServicePackage[];
+    taxRates?: TaxRate[];
     job: Job | null;
 }
 
-const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, onAuthorizeCheckInExtra, job }) => {
+const CheckInModal: React.FC<CheckInModalProps> = ({
+    isOpen,
+    onClose,
+    onSave,
+    onAuthorizeCheckInExtra,
+    onCheckInAdditions,
+    servicePackages = [],
+    taxRates = [],
+    job
+}) => {
     const [keyNumber, setKeyNumber] = useState<string>('');
     const [mileage, setMileage] = useState<string>('');
     const [photos, setPhotos] = useState<TempCheckInPhoto[]>([]);
+    const [checkInput, setCheckInput] = useState<string>('');
+    const [checkItems, setCheckItems] = useState<string[]>([]);
+    const [packageSearch, setPackageSearch] = useState<string>('');
+    const [selectedPackages, setSelectedPackages] = useState<ServicePackage[]>([]);
     const [extraWorkAuthorized, setExtraWorkAuthorized] = useState<boolean>(false);
     const [extraWorkDescription, setExtraWorkDescription] = useState<string>('');
     const [extraWorkGross, setExtraWorkGross] = useState<string>('');
@@ -49,18 +77,47 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
             setKeyNumber(job.keyNumber?.toString() || '');
             setMileage(job.mileage?.toString() || '');
             setPhotos(job.checkInPhotos || []);
+            setCheckInput('');
+            setCheckItems([]);
+            setPackageSearch('');
+            setSelectedPackages([]);
             setExtraWorkAuthorized(false);
             setExtraWorkDescription('');
             setExtraWorkGross('');
         }
     }, [job]);
 
+    const availablePackages = useMemo(() => {
+        const term = packageSearch.trim().toLowerCase();
+        const selectedIds = new Set(selectedPackages.map(p => p.id));
+        return [...servicePackages]
+            .filter(p => !selectedIds.has(p.id))
+            .filter(p => {
+                if (!term) return true;
+                return (p.name || '').toLowerCase().includes(term) || (p.description || '').toLowerCase().includes(term);
+            })
+            .sort((a, b) => {
+                // Prioritize packages belonging to the job's business entity
+                const aMatch = job?.entityId && a.entityId === job.entityId ? 0 : 1;
+                const bMatch = job?.entityId && b.entityId === job.entityId ? 0 : 1;
+                if (aMatch !== bMatch) return aMatch - bMatch;
+                return (a.name || '').localeCompare(b.name || '');
+            });
+    }, [servicePackages, selectedPackages, packageSearch, job?.entityId]);
+
+    const handleAddCheckItem = () => {
+        const trimmed = checkInput.trim();
+        if (!trimmed) return;
+        setCheckItems(prev => [...prev, trimmed]);
+        setCheckInput('');
+    };
+
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         if (event.target.files) {
             for (const file of event.target.files) {
                 const isVideo = file.type.startsWith('video/');
                 const previewUrl = URL.createObjectURL(file);
-                
+
                 const newPhoto: TempCheckInPhoto = {
                     id: crypto.randomUUID(),
                     tempDataUrl: previewUrl,
@@ -113,11 +170,28 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
             }
         }
 
+        const finalChecks = [...checkItems];
+        if (checkInput.trim()) {
+            finalChecks.push(checkInput.trim());
+        }
+
         const trimmedExtra = extraWorkDescription.trim();
         const extraAmount = parseFloat(extraWorkGross) || 0;
-        const extraNoteLine = (extraWorkAuthorized && trimmedExtra)
-            ? `[Check-In Extra Authorized: ${trimmedExtra}${extraAmount > 0 ? ` (+£${extraAmount.toFixed(2)} inc VAT)` : ''}]`
-            : '';
+        const noteLines: string[] = [];
+        if (finalChecks.length > 0) {
+            finalChecks.forEach(c => noteLines.push(`[Check-In Check Requested: ${c}]`));
+        }
+        selectedPackages.forEach(pkg => {
+            const { net, vat } = calculatePackagePrices(pkg, taxRates);
+            const gross = net + vat;
+            noteLines.push(`[Check-In Package Added: ${pkg.name || 'Service Package'} (+£${gross.toFixed(2)} inc VAT)]`);
+        });
+        if (extraWorkAuthorized && trimmedExtra) {
+            noteLines.push(`[Check-In Extra Authorized: ${trimmedExtra}${extraAmount > 0 ? ` (+£${extraAmount.toFixed(2)} inc VAT)` : ''}]`);
+        }
+
+        const existingObs = job.technicianObservations || [];
+        const newObs = finalChecks.map(c => `Check-In Request: ${c}`);
 
         const updatedJob: Job = {
             ...job,
@@ -125,14 +199,24 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
             mileage: mileage ? parseInt(mileage, 10) : undefined,
             checkInPhotos: finalPhotos,
             vehicleStatus: 'On Site',
-            notes: extraNoteLine
-                ? (job.notes ? `${job.notes}\n${extraNoteLine}` : extraNoteLine)
+            technicianObservations: newObs.length > 0 ? [...existingObs, ...newObs] : job.technicianObservations,
+            notes: noteLines.length > 0
+                ? (job.notes ? `${job.notes}\n${noteLines.join('\n')}` : noteLines.join('\n'))
                 : job.notes
         };
         console.log("[CheckIn] Saving job...", updatedJob);
         try {
             await onSave(updatedJob);
-            if (extraWorkAuthorized && trimmedExtra && onAuthorizeCheckInExtra) {
+            const hasAdditions = selectedPackages.length > 0 || finalChecks.length > 0 || (extraWorkAuthorized && !!trimmedExtra);
+            if (hasAdditions && onCheckInAdditions) {
+                await onCheckInAdditions(updatedJob, {
+                    packages: selectedPackages,
+                    checks: finalChecks,
+                    customExtra: (extraWorkAuthorized && trimmedExtra)
+                        ? { description: trimmedExtra, deltaGross: extraAmount }
+                        : undefined,
+                });
+            } else if (extraWorkAuthorized && trimmedExtra && onAuthorizeCheckInExtra) {
                 await onAuthorizeCheckInExtra(updatedJob, trimmedExtra, extraAmount);
             }
             onClose();
@@ -164,8 +248,8 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                             </p>
                         </div>
                     </div>
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors"
                         title="Close"
                     >
@@ -175,14 +259,12 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
 
                 <main className="flex-grow overflow-y-auto p-4 sm:p-6 space-y-5 custom-scrollbar">
                     {/* Parts Status Banner */}
-                    <div className={`p-3.5 rounded-2xl text-xs sm:text-sm border flex items-center gap-3 ${
-                        partsReady 
-                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                    <div className={`p-3.5 rounded-2xl text-xs sm:text-sm border flex items-center gap-3 ${partsReady
+                            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
                             : 'bg-amber-50 border-amber-200 text-amber-900'
-                    }`}>
-                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs ${
-                            partsReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                         }`}>
+                        <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 shadow-2xs ${partsReady ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                            }`}>
                             {partsReady ? <CheckCircle2 size={18} /> : <Clock size={18} />}
                         </div>
                         <div className="min-w-0 flex-grow">
@@ -190,8 +272,8 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                                 Parts Status: {job.partsStatus || 'Not Required'}
                             </p>
                             <p className="opacity-90 text-[11px] font-medium leading-tight mt-0.5">
-                                {partsReady 
-                                    ? 'All parts ready or not required. Vehicle will be workshop-ready upon check-in.' 
+                                {partsReady
+                                    ? 'All parts ready or not required. Vehicle will be workshop-ready upon check-in.'
                                     : 'Parts pending delivery. Vehicle will remain in pending state after check-in.'}
                             </p>
                         </div>
@@ -222,11 +304,10 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                                             setKeyNumber(keyNumber + 'S');
                                         }
                                     }}
-                                    className={`px-3.5 rounded-xl font-black text-sm border flex items-center justify-center gap-1 transition-all shadow-2xs ${
-                                        keyNumber.endsWith('S') 
-                                            ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-200' 
+                                    className={`px-3.5 rounded-xl font-black text-sm border flex items-center justify-center gap-1 transition-all shadow-2xs ${keyNumber.endsWith('S')
+                                            ? 'bg-indigo-600 text-white border-indigo-600 ring-2 ring-indigo-200'
                                             : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300 hover:text-indigo-600'
-                                    }`}
+                                        }`}
                                     title="Toggle Sales 'S' Suffix"
                                 >
                                     +S
@@ -255,39 +336,158 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                             </div>
                         </div>
                     </div>
-                    
-                    {/* Additional Work Authorized at Drop-Off (Estimate Override) */}
-                    <div className="p-3.5 rounded-2xl border border-amber-200 bg-amber-50/70 space-y-2.5">
-                        <label className="flex items-center gap-2.5 cursor-pointer select-none">
-                            <input
-                                type="checkbox"
-                                checked={extraWorkAuthorized}
-                                onChange={e => setExtraWorkAuthorized(e.target.checked)}
-                                className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
-                            />
-                            <span className="text-xs font-bold text-amber-950">
-                                Client requested additional service/package at Check-In (records authorized override)
+
+                    {/* Job Card Checks & Additional Service Packages at Check-In */}
+                    <div className="p-3.5 rounded-2xl border border-amber-200 bg-amber-50/60 space-y-3">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-black uppercase tracking-wider text-amber-900 flex items-center gap-1.5">
+                                <Wrench size={13} className="text-amber-600" />
+                                Job Card Checks &amp; Extra Service Packages
                             </span>
-                        </label>
-                        {extraWorkAuthorized && (
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-1">
+                            <span className="text-[10px] font-semibold text-amber-700">
+                                Added straight to Job Card &amp; Estimate
+                            </span>
+                        </div>
+
+                        {/* 1. Add Check / Concern to Job Card */}
+                        <div className="space-y-1.5">
+                            <label className="block text-[11px] font-bold text-slate-700">
+                                Add Check / Concern to Job Card
+                            </label>
+                            <div className="flex gap-2">
                                 <input
                                     type="text"
-                                    value={extraWorkDescription}
-                                    onChange={e => setExtraWorkDescription(e.target.value)}
-                                    placeholder="Extra work requested (e.g. MOT + Wipers)"
-                                    className="sm:col-span-2 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-medium"
+                                    value={checkInput}
+                                    onChange={e => setCheckInput(e.target.value)}
+                                    onKeyDown={e => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleAddCheckItem();
+                                        }
+                                    }}
+                                    placeholder="e.g. Noise from suspension, check wipers"
+                                    className="flex-1 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-medium"
                                 />
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={extraWorkGross}
-                                    onChange={e => setExtraWorkGross(e.target.value)}
-                                    placeholder="Extra £ inc VAT"
-                                    className="px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-mono font-bold"
-                                />
+                                <button
+                                    type="button"
+                                    onClick={handleAddCheckItem}
+                                    disabled={!checkInput.trim()}
+                                    className="px-3 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 disabled:opacity-40 flex items-center gap-1 shrink-0"
+                                >
+                                    <Plus size={14} /> Add Check
+                                </button>
+                            </div>
+                            {checkItems.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5 pt-1">
+                                    {checkItems.map((item, idx) => (
+                                        <span key={idx} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-amber-300 text-xs font-semibold text-slate-800">
+                                            <span>Check: {item}</span>
+                                            <button
+                                                type="button"
+                                                onClick={() => setCheckItems(prev => prev.filter((_, i) => i !== idx))}
+                                                className="text-slate-400 hover:text-red-600"
+                                            >
+                                                <X size={12} />
+                                            </button>
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 2. Pull down Service Package */}
+                        {servicePackages.length > 0 && (
+                            <div className="space-y-1.5 pt-1 border-t border-amber-200/70">
+                                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                                    <Package size={12} className="text-indigo-600" />
+                                    Add Service Package (records authorized override)
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <input
+                                        type="text"
+                                        value={packageSearch}
+                                        onChange={e => setPackageSearch(e.target.value)}
+                                        placeholder="Filter packages..."
+                                        className="px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-medium"
+                                    />
+                                    <select
+                                        value=""
+                                        onChange={e => {
+                                            const pkg = servicePackages.find(p => p.id === e.target.value);
+                                            if (pkg) {
+                                                setSelectedPackages(prev => [...prev, pkg]);
+                                            }
+                                        }}
+                                        className="sm:col-span-2 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-semibold text-slate-800"
+                                    >
+                                        <option value="">-- Select Service Package to Add --</option>
+                                        {availablePackages.map(pkg => {
+                                            const { net, vat } = calculatePackagePrices(pkg, taxRates);
+                                            const gross = net + vat;
+                                            return (
+                                                <option key={pkg.id} value={pkg.id}>
+                                                    {pkg.name} — £{gross.toFixed(2)} inc VAT
+                                                </option>
+                                            );
+                                        })}
+                                    </select>
+                                </div>
+                                {selectedPackages.length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {selectedPackages.map(pkg => {
+                                            const { net, vat } = calculatePackagePrices(pkg, taxRates);
+                                            const gross = net + vat;
+                                            return (
+                                                <span key={pkg.id} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-200 text-xs font-semibold text-indigo-900">
+                                                    <span>{pkg.name} (£{gross.toFixed(2)})</span>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedPackages(prev => prev.filter(p => p.id !== pkg.id))}
+                                                        className="text-indigo-400 hover:text-red-600"
+                                                    >
+                                                        <X size={12} />
+                                                    </button>
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         )}
+
+                        {/* 3. Custom Bespoke Extra Work */}
+                        <div className="pt-1 border-t border-amber-200/70">
+                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                <input
+                                    type="checkbox"
+                                    checked={extraWorkAuthorized}
+                                    onChange={e => setExtraWorkAuthorized(e.target.checked)}
+                                    className="w-4 h-4 rounded text-amber-600 focus:ring-amber-500"
+                                />
+                                <span className="text-xs font-bold text-amber-950">
+                                    Other custom extra work authorized at Check-In
+                                </span>
+                            </label>
+                            {extraWorkAuthorized && (
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+                                    <input
+                                        type="text"
+                                        value={extraWorkDescription}
+                                        onChange={e => setExtraWorkDescription(e.target.value)}
+                                        placeholder="Extra work requested (e.g. Wipers)"
+                                        className="sm:col-span-2 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-medium"
+                                    />
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={extraWorkGross}
+                                        onChange={e => setExtraWorkGross(e.target.value)}
+                                        placeholder="Extra £ inc VAT"
+                                        className="px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-mono font-bold"
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Condition Media (Photos / Videos) */}
@@ -341,8 +541,8 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                         {/* Media Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-1">
                             {photos.map((photo, index) => (
-                                <div 
-                                    key={photo.id} 
+                                <div
+                                    key={photo.id}
                                     className="relative group aspect-square rounded-2xl overflow-hidden bg-slate-900 border border-slate-200 shadow-sm cursor-pointer hover:shadow-md transition-all"
                                     onClick={() => {
                                         setLightboxIndex(index);
@@ -366,11 +566,11 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                                     </span>
 
                                     {/* Delete Button */}
-                                    <button 
+                                    <button
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             handleRemovePhoto(photo.id);
-                                        }} 
+                                        }}
                                         className="absolute top-2 right-2 bg-white/95 hover:bg-red-50 text-slate-400 hover:text-red-600 p-1.5 rounded-xl shadow-md transition-colors"
                                         title="Remove media"
                                     >
@@ -378,11 +578,11 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                                     </button>
 
                                     {/* Notes input overlay */}
-                                    <div 
+                                    <div
                                         className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/50 to-transparent p-2 pt-4"
                                         onClick={(e) => e.stopPropagation()}
                                     >
-                                        <input 
+                                        <input
                                             type="text"
                                             value={photo.notes || ''}
                                             onChange={(e) => handlePhotoNotesChange(photo.id, e.target.value)}
@@ -394,7 +594,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                             ))}
 
                             {/* Drop / Add Tile */}
-                            <div 
+                            <div
                                 onClick={() => uploadInputRef.current?.click()}
                                 className="aspect-square border-2 border-dashed border-slate-300 hover:border-indigo-400 rounded-2xl flex flex-col items-center justify-center bg-slate-50 hover:bg-indigo-50/30 transition-all cursor-pointer group p-3 text-center"
                             >
@@ -439,14 +639,14 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
 
                 {/* Modal Footer */}
                 <footer className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 bg-slate-50/70 rounded-b-3xl sm:rounded-b-2xl">
-                    <button 
-                        onClick={onClose} 
+                    <button
+                        onClick={onClose}
                         className="py-2.5 px-4 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold text-xs hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-2xs"
                     >
                         Cancel
                     </button>
-                    <button 
-                        onClick={handleSave} 
+                    <button
+                        onClick={handleSave}
                         className="flex items-center justify-center gap-2 py-2.5 px-5 bg-indigo-600 text-white font-bold rounded-xl text-xs shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-[0.98]"
                     >
                         <Save size={15} />
@@ -455,7 +655,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({ isOpen, onClose, onSave, on
                 </footer>
             </div>
 
-            <MediaLightbox 
+            <MediaLightbox
                 isOpen={isLightboxOpen}
                 onClose={() => setIsLightboxOpen(false)}
                 mediaIds={photos.map(p => p.id)}

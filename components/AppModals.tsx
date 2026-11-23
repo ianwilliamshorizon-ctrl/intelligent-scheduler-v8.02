@@ -8,6 +8,7 @@ import { ModalState, ModalSetters } from '../core/hooks/useModalState';
 import { useWorkshopActions } from '../core/hooks/useWorkshopActions';
 import { sendOutboundEmail } from '../core/services/emailService';
 import { createEstimateOverrideRecord } from '../core/utils/estimateVersioning';
+import { calculatePackagePrices } from '../core/utils/packageUtils';
 
 // Core Modal Components (Always needed or lightweight)
 import ConfirmationModal from './ConfirmationModal';
@@ -1409,23 +1410,87 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         isOpen={!!modals.checkInJob}
                         onClose={() => setters.setCheckInJob(null)}
                         onSave={(updatedJob) => handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs')}
-                        onAuthorizeCheckInExtra={async (updatedJob, description, deltaGross) => {
+                        servicePackages={data.servicePackages}
+                        taxRates={data.taxRates}
+                        onCheckInAdditions={async (updatedJob, { packages, checks, customExtra }) => {
+                            const standardTaxRateId = (data.taxRates || []).find(t => t.code === 'T1')?.id || '';
+                            const t99RateId = (data.taxRates || []).find(t => t.code === 'T99')?.id;
+                            const newLineItems: T.EstimateLineItem[] = [];
+                            const newOverrides: T.EstimateOverrideRecord[] = [];
+
+                            for (const pkg of packages) {
+                                const { net, vat } = calculatePackagePrices(pkg, data.taxRates || []);
+                                const gross = Math.round((net + vat) * 100) / 100;
+                                newLineItems.push({
+                                    id: crypto.randomUUID(),
+                                    description: pkg.name || 'Service Package',
+                                    quantity: 1,
+                                    unitPrice: net,
+                                    unitCost: 0,
+                                    isLabor: false,
+                                    taxCodeId: pkg.taxCodeId || standardTaxRateId,
+                                    servicePackageId: pkg.id,
+                                    servicePackageName: pkg.name,
+                                    isPackageComponent: false,
+                                    isOptional: false,
+                                    preCalculatedVat: pkg.taxCodeId === t99RateId ? vat : undefined,
+                                });
+                                for (const costItem of (pkg.costItems || [])) {
+                                    newLineItems.push({
+                                        ...costItem,
+                                        id: crypto.randomUUID(),
+                                        servicePackageId: pkg.id,
+                                        servicePackageName: pkg.name,
+                                        isPackageComponent: true,
+                                    });
+                                }
+                                newOverrides.push(createEstimateOverrideRecord(
+                                    currentUser.id,
+                                    'check_in',
+                                    `Authorized service package at check-in: ${pkg.name}`,
+                                    gross,
+                                    pkg.name
+                                ));
+                            }
+
+                            for (const checkText of checks) {
+                                newLineItems.push({
+                                    id: crypto.randomUUID(),
+                                    description: `Check / Investigate: ${checkText}`,
+                                    quantity: 1,
+                                    unitPrice: 0,
+                                    unitCost: 0,
+                                    isLabor: true,
+                                    taxCodeId: standardTaxRateId,
+                                });
+                            }
+
+                            if (customExtra && customExtra.description) {
+                                newOverrides.push(createEstimateOverrideRecord(
+                                    currentUser.id,
+                                    'check_in',
+                                    `Authorized at vehicle check-in: ${customExtra.description}`,
+                                    customExtra.deltaGross,
+                                    customExtra.description
+                                ));
+                            }
+
                             const linkedEst = (data.estimates || []).find(
                                 e => e.id === updatedJob.estimateId || e.jobId === updatedJob.id
                             );
                             if (linkedEst) {
-                                const ov = createEstimateOverrideRecord(
-                                    currentUser.id,
-                                    'check_in',
-                                    `Authorized at vehicle check-in: ${description}`,
-                                    deltaGross,
-                                    description
-                                );
                                 const nextEst: T.Estimate = {
                                     ...linkedEst,
-                                    authorizedOverrides: [...(linkedEst.authorizedOverrides || []), ov]
+                                    lineItems: [...(linkedEst.lineItems || []), ...newLineItems],
+                                    authorizedOverrides: [...(linkedEst.authorizedOverrides || []), ...newOverrides],
                                 };
                                 await handleSaveItem(data.setEstimates, nextEst, 'brooks_estimates');
+                            } else if (newLineItems.length > 0) {
+                                const jobWithItems: T.Job = {
+                                    ...updatedJob,
+                                    lineItems: [...(updatedJob.lineItems || []), ...newLineItems],
+                                };
+                                await handleSaveItem(data.setJobs, jobWithItems, 'brooks_jobs');
                             }
                         }}
                         job={modals.checkInJob}
