@@ -1412,6 +1412,7 @@ const AppModals: React.FC<AppModalsProps> = ({ modals, setters, actions, commonP
                         onSave={(updatedJob) => handleSaveItem(data.setJobs, updatedJob, 'brooks_jobs')}
                         servicePackages={data.servicePackages}
                         taxRates={data.taxRates}
+                        vehicle={data.vehicles.find(v => v.id === modals.checkInJob?.vehicleId) || null}
                         onCheckInAdditions={async (updatedJob, { packages, checks, customExtra }) => {
                             const standardTaxRateId = (data.taxRates || []).find(t => t.code === 'T1')?.id || '';
                             const t99RateId = (data.taxRates || []).find(t => t.code === 'T99')?.id;

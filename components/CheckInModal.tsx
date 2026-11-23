@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Job, CheckInPhoto, ServicePackage, TaxRate } from '../types';
+import { Job, CheckInPhoto, ServicePackage, TaxRate, Vehicle } from '../types';
 import {
     X,
     Save,
@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { saveImage } from '../utils/imageStore';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
+import { getScoredServicePackages } from '../utils/servicePackageScoring';
 import AsyncMedia from './AsyncMedia';
 import MediaLightbox from './MediaLightbox';
 
@@ -43,6 +44,7 @@ interface CheckInModalProps {
     onCheckInAdditions?: (job: Job, additions: CheckInAdditions) => Promise<void> | void;
     servicePackages?: ServicePackage[];
     taxRates?: TaxRate[];
+    vehicle?: Vehicle | null;
     job: Job | null;
 }
 
@@ -54,6 +56,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     onCheckInAdditions,
     servicePackages = [],
     taxRates = [],
+    vehicle = null,
     job
 }) => {
     const [keyNumber, setKeyNumber] = useState<string>('');
@@ -62,6 +65,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     const [checkInput, setCheckInput] = useState<string>('');
     const [checkItems, setCheckItems] = useState<string[]>([]);
     const [packageSearch, setPackageSearch] = useState<string>('');
+    const [showAllEntities, setShowAllEntities] = useState<boolean>(false);
     const [selectedPackages, setSelectedPackages] = useState<ServicePackage[]>([]);
     const [extraWorkAuthorized, setExtraWorkAuthorized] = useState<boolean>(false);
     const [extraWorkDescription, setExtraWorkDescription] = useState<string>('');
@@ -80,6 +84,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
             setCheckInput('');
             setCheckItems([]);
             setPackageSearch('');
+            setShowAllEntities(false);
             setSelectedPackages([]);
             setExtraWorkAuthorized(false);
             setExtraWorkDescription('');
@@ -90,20 +95,36 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     const availablePackages = useMemo(() => {
         const term = packageSearch.trim().toLowerCase();
         const selectedIds = new Set(selectedPackages.map(p => p.id));
-        return [...servicePackages]
-            .filter(p => !selectedIds.has(p.id))
-            .filter(p => {
-                if (!term) return true;
-                return (p.name || '').toLowerCase().includes(term) || (p.description || '').toLowerCase().includes(term);
-            })
-            .sort((a, b) => {
-                // Prioritize packages belonging to the job's business entity
-                const aMatch = job?.entityId && a.entityId === job.entityId ? 0 : 1;
-                const bMatch = job?.entityId && b.entityId === job.entityId ? 0 : 1;
-                if (aMatch !== bMatch) return aMatch - bMatch;
-                return (a.name || '').localeCompare(b.name || '');
-            });
-    }, [servicePackages, selectedPackages, packageSearch, job?.entityId]);
+        const unpicked = servicePackages.filter(p => !selectedIds.has(p.id));
+
+        // 1. Entity scoping (mirroring EstimateFormModal): current entity first, cross-entity fallback if toggled or no matches
+        const currentEntityPkgs = unpicked.filter(p => !p.entityId || !job?.entityId || p.entityId === job.entityId);
+        let pool = showAllEntities ? unpicked : currentEntityPkgs;
+
+        if (!showAllEntities && vehicle) {
+            const currentScored = getScoredServicePackages(currentEntityPkgs, vehicle);
+            const hasVehicleMatch = currentScored.some(r => r.status !== 'other' && r.status !== 'generic');
+            if (!hasVehicleMatch) {
+                const otherEntityPkgs = unpicked.filter(p => p.entityId && job?.entityId && p.entityId !== job.entityId);
+                const otherMatches = getScoredServicePackages(otherEntityPkgs, vehicle)
+                    .filter(r => r.status !== 'other' && r.status !== 'generic')
+                    .map(r => r.pkg);
+                if (otherMatches.length > 0) {
+                    pool = [...currentEntityPkgs, ...otherMatches];
+                }
+            }
+        }
+
+        // 2. Score and filter against the vehicle (and optional search term)
+        const scored = getScoredServicePackages(pool, vehicle, packageSearch);
+        const compatible = scored.filter(r => !vehicle || term.length > 0 || r.status !== 'other');
+        const list = compatible.length > 0 ? compatible : scored;
+
+        return list.filter(({ pkg }) => {
+            if (!term) return true;
+            return (pkg.name || '').toLowerCase().includes(term) || (pkg.description || '').toLowerCase().includes(term);
+        });
+    }, [servicePackages, selectedPackages, packageSearch, showAllEntities, job?.entityId, vehicle]);
 
     const handleAddCheckItem = () => {
         const trimmed = checkInput.trim();
@@ -398,10 +419,21 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
                         {/* 2. Pull down Service Package */}
                         {servicePackages.length > 0 && (
                             <div className="space-y-1.5 pt-1 border-t border-amber-200/70">
-                                <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
-                                    <Package size={12} className="text-indigo-600" />
-                                    Add Service Package (records authorized override)
-                                </label>
+                                <div className="flex items-center justify-between gap-2">
+                                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
+                                        <Package size={12} className="text-indigo-600" />
+                                        Add Service Package {vehicle ? `(${vehicle.make} ${vehicle.model})` : ''}
+                                    </label>
+                                    <label className="flex items-center gap-1 text-[10px] font-semibold text-slate-600 cursor-pointer select-none">
+                                        <input
+                                            type="checkbox"
+                                            checked={showAllEntities}
+                                            onChange={e => setShowAllEntities(e.target.checked)}
+                                            className="w-3 h-3 rounded text-indigo-600"
+                                        />
+                                        All entities
+                                    </label>
+                                </div>
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                     <input
                                         type="text"
@@ -420,13 +452,13 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
                                         }}
                                         className="sm:col-span-2 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-semibold text-slate-800"
                                     >
-                                        <option value="">-- Select Service Package to Add --</option>
-                                        {availablePackages.map(pkg => {
+                                        <option value="">-- Select Matched Package ({availablePackages.length}) --</option>
+                                        {availablePackages.map(({ pkg, matchType }) => {
                                             const { net, vat } = calculatePackagePrices(pkg, taxRates);
                                             const gross = net + vat;
                                             return (
                                                 <option key={pkg.id} value={pkg.id}>
-                                                    {pkg.name} — £{gross.toFixed(2)} inc VAT
+                                                    {pkg.name} — £{gross.toFixed(2)} ({matchType})
                                                 </option>
                                             );
                                         })}
