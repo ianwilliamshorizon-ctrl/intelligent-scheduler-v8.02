@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Job, CheckInPhoto, ServicePackage, TaxRate, Vehicle } from '../types';
 import {
     X,
@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 import { saveImage } from '../utils/imageStore';
 import { calculatePackagePrices } from '../core/utils/packageUtils';
-import { getScoredServicePackages } from '../utils/servicePackageScoring';
+import { ServicePackageSelectionModal } from './ServicePackageSelectionModal';
 import AsyncMedia from './AsyncMedia';
 import MediaLightbox from './MediaLightbox';
 
@@ -64,8 +64,7 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
     const [photos, setPhotos] = useState<TempCheckInPhoto[]>([]);
     const [checkInput, setCheckInput] = useState<string>('');
     const [checkItems, setCheckItems] = useState<string[]>([]);
-    const [packageSearch, setPackageSearch] = useState<string>('');
-    const [showAllEntities, setShowAllEntities] = useState<boolean>(false);
+    const [isPackageSelectionModalOpen, setIsPackageSelectionModalOpen] = useState<boolean>(false);
     const [selectedPackages, setSelectedPackages] = useState<ServicePackage[]>([]);
     const [extraWorkAuthorized, setExtraWorkAuthorized] = useState<boolean>(false);
     const [extraWorkDescription, setExtraWorkDescription] = useState<string>('');
@@ -83,68 +82,13 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
             setPhotos(job.checkInPhotos || []);
             setCheckInput('');
             setCheckItems([]);
-            setPackageSearch('');
-            setShowAllEntities(false);
+            setIsPackageSelectionModalOpen(false);
             setSelectedPackages([]);
             setExtraWorkAuthorized(false);
             setExtraWorkDescription('');
             setExtraWorkGross('');
         }
     }, [job]);
-
-    const availablePackages = useMemo(() => {
-        const term = packageSearch.trim().toLowerCase();
-        const selectedIds = new Set(selectedPackages.map(p => p.id));
-        const unpicked = servicePackages.filter(p => !selectedIds.has(p.id));
-
-        const scoredAll = getScoredServicePackages(unpicked, vehicle, packageSearch);
-
-        const isCurrentEntity = (pkg: ServicePackage) =>
-            !job?.entityId || !pkg.entityId || pkg.entityId === job.entityId;
-
-        const isModelMatch = (status: string) => status === 'exact' || status === 'model';
-
-        // Filter:
-        // - If "All entities" is off: keep model matches, generic/universal packages, or current business entity packages
-        // - Exclude other-make mismatches ('other') when a vehicle is known (unless user is actively searching by text)
-        const filtered = scoredAll.filter(({ pkg, status }) => {
-            if (!showAllEntities) {
-                const allowed = isModelMatch(status) || status === 'generic' || isCurrentEntity(pkg);
-                if (!allowed) return false;
-            }
-            if (vehicle && !term && status === 'other') {
-                return false;
-            }
-            if (term) {
-                const matchesText =
-                    (pkg.name || '').toLowerCase().includes(term) ||
-                    (pkg.description || '').toLowerCase().includes(term);
-                if (!matchesText) return false;
-            }
-            return true;
-        });
-
-        const getTier = (pkg: ServicePackage, status: string): number => {
-            if (isModelMatch(status)) return 0; // Model matches first
-            if (status === 'make' || status === 'engine') return 1; // Then make/engine matches
-            if (status === 'generic' || isCurrentEntity(pkg)) return 2; // Then generic / business entity
-            return 3;
-        };
-
-        return [...filtered].sort((a, b) => {
-            const tierA = getTier(a.pkg, a.status);
-            const tierB = getTier(b.pkg, b.status);
-            if (tierA !== tierB) return tierA - tierB;
-
-            // Within the same tier, prefer current business entity first, then higher score, then alphabetical
-            const entityA = isCurrentEntity(a.pkg) ? 0 : 1;
-            const entityB = isCurrentEntity(b.pkg) ? 0 : 1;
-            if (entityA !== entityB) return entityA - entityB;
-
-            if (b.score !== a.score) return b.score - a.score;
-            return (a.pkg.name || '').localeCompare(b.pkg.name || '');
-        });
-    }, [servicePackages, selectedPackages, packageSearch, showAllEntities, job?.entityId, vehicle]);
 
     const handleAddCheckItem = () => {
         const trimmed = checkInput.trim();
@@ -436,56 +380,25 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
                             )}
                         </div>
 
-                        {/* 2. Pull down Service Package */}
+                        {/* 2. Pull down Service Package (reusing Estimate creator's ServicePackageSelectionModal) */}
                         {servicePackages.length > 0 && (
-                            <div className="space-y-1.5 pt-1 border-t border-amber-200/70">
+                            <div className="space-y-2 pt-1 border-t border-amber-200/70">
                                 <div className="flex items-center justify-between gap-2">
-                                    <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-700">
-                                        <Package size={12} className="text-indigo-600" />
-                                        Add Service Package {vehicle ? `(${vehicle.make} ${vehicle.model})` : ''}
-                                    </label>
-                                    <label className="flex items-center gap-1 text-[10px] font-semibold text-slate-600 cursor-pointer select-none">
-                                        <input
-                                            type="checkbox"
-                                            checked={showAllEntities}
-                                            onChange={e => setShowAllEntities(e.target.checked)}
-                                            className="w-3 h-3 rounded text-indigo-600"
-                                        />
-                                        All entities
-                                    </label>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    <input
-                                        type="text"
-                                        value={packageSearch}
-                                        onChange={e => setPackageSearch(e.target.value)}
-                                        placeholder="Filter packages..."
-                                        className="px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-medium"
-                                    />
-                                    <select
-                                        value=""
-                                        onChange={e => {
-                                            const pkg = servicePackages.find(p => p.id === e.target.value);
-                                            if (pkg) {
-                                                setSelectedPackages(prev => [...prev, pkg]);
-                                            }
-                                        }}
-                                        className="sm:col-span-2 px-3 py-2 border border-amber-300 rounded-xl text-xs bg-white font-semibold text-slate-800"
+                                    <span className="text-[11px] font-bold text-slate-700">
+                                        Service Packages (records authorized override)
+                                    </span>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPackageSelectionModalOpen(true)}
+                                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition whitespace-nowrap cursor-pointer"
+                                        title="Open selectable modal to pick and match service packages"
                                     >
-                                        <option value="">-- Select Matched Package ({availablePackages.length}) --</option>
-                                        {availablePackages.map(({ pkg, matchType }) => {
-                                            const { net, vat } = calculatePackagePrices(pkg, taxRates);
-                                            const gross = net + vat;
-                                            return (
-                                                <option key={pkg.id} value={pkg.id}>
-                                                    {pkg.name} — £{gross.toFixed(2)} ({matchType})
-                                                </option>
-                                            );
-                                        })}
-                                    </select>
+                                        <Package size={14} />
+                                        Add Service Package
+                                    </button>
                                 </div>
                                 {selectedPackages.length > 0 && (
-                                    <div className="flex flex-wrap gap-1.5 pt-1">
+                                    <div className="flex flex-wrap gap-1.5">
                                         {selectedPackages.map(pkg => {
                                             const { net, vat } = calculatePackagePrices(pkg, taxRates);
                                             const gross = net + vat;
@@ -712,6 +625,17 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
                 onClose={() => setIsLightboxOpen(false)}
                 mediaIds={photos.map(p => p.id)}
                 initialIndex={lightboxIndex}
+            />
+
+            <ServicePackageSelectionModal
+                isOpen={isPackageSelectionModalOpen}
+                onClose={() => setIsPackageSelectionModalOpen(false)}
+                servicePackages={servicePackages}
+                vehicle={vehicle}
+                narrative={[job.description, job.notes, ...checkItems, checkInput].filter(Boolean).join(' ')}
+                taxRates={taxRates}
+                initialSelectedPackageIds={selectedPackages.map(p => p.id)}
+                onSelectPackages={(pkgs) => setSelectedPackages(pkgs)}
             />
         </div>
     );
