@@ -97,32 +97,52 @@ const CheckInModal: React.FC<CheckInModalProps> = ({
         const selectedIds = new Set(selectedPackages.map(p => p.id));
         const unpicked = servicePackages.filter(p => !selectedIds.has(p.id));
 
-        // 1. Entity scoping (mirroring EstimateFormModal): current entity first, cross-entity fallback if toggled or no matches
-        const currentEntityPkgs = unpicked.filter(p => !p.entityId || !job?.entityId || p.entityId === job.entityId);
-        let pool = showAllEntities ? unpicked : currentEntityPkgs;
+        const scoredAll = getScoredServicePackages(unpicked, vehicle, packageSearch);
 
-        if (!showAllEntities && vehicle) {
-            const currentScored = getScoredServicePackages(currentEntityPkgs, vehicle);
-            const hasVehicleMatch = currentScored.some(r => r.status !== 'other' && r.status !== 'generic');
-            if (!hasVehicleMatch) {
-                const otherEntityPkgs = unpicked.filter(p => p.entityId && job?.entityId && p.entityId !== job.entityId);
-                const otherMatches = getScoredServicePackages(otherEntityPkgs, vehicle)
-                    .filter(r => r.status !== 'other' && r.status !== 'generic')
-                    .map(r => r.pkg);
-                if (otherMatches.length > 0) {
-                    pool = [...currentEntityPkgs, ...otherMatches];
-                }
+        const isCurrentEntity = (pkg: ServicePackage) =>
+            !job?.entityId || !pkg.entityId || pkg.entityId === job.entityId;
+
+        const isModelMatch = (status: string) => status === 'exact' || status === 'model';
+
+        // Filter:
+        // - If "All entities" is off: keep model matches, generic/universal packages, or current business entity packages
+        // - Exclude other-make mismatches ('other') when a vehicle is known (unless user is actively searching by text)
+        const filtered = scoredAll.filter(({ pkg, status }) => {
+            if (!showAllEntities) {
+                const allowed = isModelMatch(status) || status === 'generic' || isCurrentEntity(pkg);
+                if (!allowed) return false;
             }
-        }
+            if (vehicle && !term && status === 'other') {
+                return false;
+            }
+            if (term) {
+                const matchesText =
+                    (pkg.name || '').toLowerCase().includes(term) ||
+                    (pkg.description || '').toLowerCase().includes(term);
+                if (!matchesText) return false;
+            }
+            return true;
+        });
 
-        // 2. Score and filter against the vehicle (and optional search term)
-        const scored = getScoredServicePackages(pool, vehicle, packageSearch);
-        const compatible = scored.filter(r => !vehicle || term.length > 0 || r.status !== 'other');
-        const list = compatible.length > 0 ? compatible : scored;
+        const getTier = (pkg: ServicePackage, status: string): number => {
+            if (isModelMatch(status)) return 0; // Model matches first
+            if (status === 'make' || status === 'engine') return 1; // Then make/engine matches
+            if (status === 'generic' || isCurrentEntity(pkg)) return 2; // Then generic / business entity
+            return 3;
+        };
 
-        return list.filter(({ pkg }) => {
-            if (!term) return true;
-            return (pkg.name || '').toLowerCase().includes(term) || (pkg.description || '').toLowerCase().includes(term);
+        return [...filtered].sort((a, b) => {
+            const tierA = getTier(a.pkg, a.status);
+            const tierB = getTier(b.pkg, b.status);
+            if (tierA !== tierB) return tierA - tierB;
+
+            // Within the same tier, prefer current business entity first, then higher score, then alphabetical
+            const entityA = isCurrentEntity(a.pkg) ? 0 : 1;
+            const entityB = isCurrentEntity(b.pkg) ? 0 : 1;
+            if (entityA !== entityB) return entityA - entityB;
+
+            if (b.score !== a.score) return b.score - a.score;
+            return (a.pkg.name || '').localeCompare(b.pkg.name || '');
         });
     }, [servicePackages, selectedPackages, packageSearch, showAllEntities, job?.entityId, vehicle]);
 
