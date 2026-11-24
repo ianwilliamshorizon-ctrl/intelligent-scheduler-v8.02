@@ -651,5 +651,7 @@ const initialDataValue = {
     financialBaselines: getInitialFinancialBaselines(),
 };
 
+export const getInitialTrainingRecords = (): any[] => [];
+
 export const initialData = initialDataValue;
 export default initialDataValue;

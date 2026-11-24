@@ -27,6 +27,8 @@ import {
 } from './management/ManagementViews';
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 import { ManagementBookingScriptsTab } from './management/tabs/ManagementBookingScriptsTab';
+import { ManagementTrainingTab } from './management/tabs/ManagementTrainingTab';
+import { Award } from 'lucide-react';
 
 // Utilities
 import { setItem } from '../core/db';
@@ -95,6 +97,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionDiagrams' },
         { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionTemplates' },
         { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStaff' },
+        { id: 'training', label: 'Staff Training & CPD', icon: Award, render: () => <ManagementTrainingTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStaff' },
         { id: 'roles', label: 'Roles', icon: ShieldCheck, render: () => <ManagementRolesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageRoles' },
         { id: 'entities', label: 'Business Entities', icon: Briefcase, render: () => <ManagementEntitiesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageEntities' },
         { id: 'lifts', label: 'Lifts & Bays', icon: ArrowUpCircle, render: () => <ManagementLiftsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageLifts' },

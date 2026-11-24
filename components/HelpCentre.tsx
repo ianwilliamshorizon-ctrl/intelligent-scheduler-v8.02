@@ -25,10 +25,17 @@ import {
   ExternalLink,
   ChevronRight,
   ArrowRight,
-  Mail
+  Mail,
+  Play,
+  Award
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useApp } from '../core/state/AppContext';
+import { useData } from '../core/state/DataContext';
+import { TRAINING_MODULES, getModuleStatusForUser, getUserCpdSummary } from '../core/data/trainingModules';
+import { ShowMePlayer } from './training/ShowMePlayer';
+import { ModuleCpdQuiz } from './training/ModuleCpdQuiz';
 
 interface HelpCentreProps {
   open: boolean;
@@ -36,7 +43,7 @@ interface HelpCentreProps {
 }
 
 type HelpTab = 'first-time-user' | 'inquiries' | 'fcs' | 'estimates' | 'workflow' | 'inventory' | 'invoicing' | 'directors' | 'mobile';
-type ViewMode = 'visual' | 'sop';
+type ViewMode = 'visual' | 'showme' | 'sop';
 
 export interface StepExample {
   title: string;
@@ -853,7 +860,11 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
     }
   };
 
+  const { currentUser } = useApp();
+  const { trainingRecords } = useData();
+  const cpdSummary = getUserCpdSummary(currentUser, trainingRecords);
   const currentSection = HELP_SECTIONS.find((sec) => sec.id === activeTab) || HELP_SECTIONS[0];
+  const activeTrainingModule = TRAINING_MODULES.find((m) => m.id === activeTab) || TRAINING_MODULES[0];
 
   if (!open) return null;
 
@@ -896,6 +907,17 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
               >
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
                 Visual Studio
+              </button>
+              <button
+                onClick={() => setViewMode('showme')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                  viewMode === 'showme'
+                    ? 'bg-indigo-600 text-white shadow'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                Show Me Replay
               </button>
               <button
                 onClick={() => setViewMode('sop')}
@@ -943,11 +965,35 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
 
         {/* MODAL CONTENT LAYOUT */}
         <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-          {/* ===================== VIEW MODE 1: VISUAL FEATURES STUDIO ===================== */}
-          {viewMode === 'visual' && (
+          {/* ===================== VIEW MODE 1 & 2: VISUAL STUDIO / SHOW ME REPLAY ===================== */}
+          {(viewMode === 'visual' || viewMode === 'showme') && (
             <>
               {/* SIDEBAR MODULE SELECTOR */}
               <div className="w-full md:w-84 bg-slate-950/70 border-b md:border-b-0 md:border-r border-slate-800 p-4 overflow-y-auto space-y-2 shrink-0">
+                {currentUser && (
+                  <div className="p-3 rounded-2xl bg-slate-900 border border-indigo-500/30 mb-3 space-y-1.5">
+                    <div className="flex items-center justify-between text-[11px] font-bold">
+                      <span className="text-indigo-300 flex items-center gap-1.5">
+                        <Award className="w-3.5 h-3.5" /> My CPD Progress
+                      </span>
+                      <span className="text-white font-mono">
+                        {cpdSummary.completedCurrentCount}/{cpdSummary.requiredCount} ({cpdSummary.percentComplete}%)
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all"
+                        style={{ width: `${cpdSummary.percentComplete}%` }}
+                      />
+                    </div>
+                    <div className="text-[10px] text-slate-400 flex justify-between">
+                      <span>{cpdSummary.totalCpdMinutes} CPD mins logged</span>
+                      {cpdSummary.refresherDueCount > 0 && (
+                        <span className="text-amber-400 font-semibold">{cpdSummary.refresherDueCount} refresher due</span>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
                   <span>Core Modules & Capabilities ({filteredSections.length})</span>
                   <span className="text-amber-400">V8.02</span>
@@ -956,6 +1002,8 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                 {filteredSections.map((sec) => {
                   const Icon = sec.icon;
                   const isActive = activeTab === sec.id;
+                  const mod = TRAINING_MODULES.find(m => m.id === sec.id);
+                  const modStatus = currentUser && mod ? getModuleStatusForUser(mod, trainingRecords, currentUser.id).status : null;
                   return (
                     <button
                       key={sec.id}
@@ -976,6 +1024,8 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-xs font-bold truncate">{sec.title}</span>
+                          {modStatus === 'current' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="CPD Current" />}
+                          {modStatus === 'refresher_due' && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="CPD Refresher Due" />}
                         </div>
                         <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
                           {sec.subtitle}
@@ -1581,6 +1631,25 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                     </p>
                   </div>
                 </div>
+
+                {viewMode === 'showme' && (
+                  <ShowMePlayer module={activeTrainingModule} />
+                )}
+
+                {viewMode === 'visual' && (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setViewMode('showme')}
+                      className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 cursor-pointer transition"
+                    >
+                      <Play className="w-3.5 h-3.5" />
+                      Show Me Animated Walkthrough
+                    </button>
+                  </div>
+                )}
+
+                <ModuleCpdQuiz module={activeTrainingModule} />
 
                 {/* 5. MODAL FOOTER */}
                 <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">

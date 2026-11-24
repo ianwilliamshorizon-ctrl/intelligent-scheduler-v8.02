@@ -14,7 +14,7 @@ import {
     getInitialAbsenceRequests, getInitialProspects, getInitialInquiries,
     getInitialReminders, getInitialAuditLog, getInitialRoles, getInitialInspectionDiagrams,
     getInitialInspectionTemplates, getInitialDiscountCodes, getInitialFinancialBaselines,
-    STANDARD_GENERIC_SERVICE_PACKAGES
+    getInitialTrainingRecords, STANDARD_GENERIC_SERVICE_PACKAGES
 } from '../data/initialData';
 
 // Defines the shape of the context, including all data collections and setters.
@@ -52,6 +52,7 @@ interface DataContextType {
     inspectionTemplates: T.InspectionTemplate[]; setInspectionTemplates: React.Dispatch<React.SetStateAction<T.InspectionTemplate[]>>;
     discountCodes: T.DiscountCode[]; setDiscountCodes: React.Dispatch<React.SetStateAction<T.DiscountCode[]>>;
     financialBaselines: T.FinancialBaseline[]; setFinancialBaselines: React.Dispatch<React.SetStateAction<T.FinancialBaseline[]>>;
+    trainingRecords: T.TrainingRecord[]; setTrainingRecords: React.Dispatch<React.SetStateAction<T.TrainingRecord[]>>;
     forceRefresh: (collectionKey: keyof any) => Promise<void>;
     isDataLoaded: boolean; // Flag to indicate if all data has been loaded.
     saveRecord: <T extends { id: string }>(collectionKey: string, record: T) => Promise<T>;
@@ -103,6 +104,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         brooks_nominalCodeRules: usePersistentState<T.NominalCodeRule[]>('brooks_nominalCodeRules', getInitialNominalCodeRules, skipLoad, { deferMs: 1750 }),
         brooks_discountCodes: usePersistentState<T.DiscountCode[]>('brooks_discountCodes', getInitialDiscountCodes, skipLoad, { deferMs: 1800 }),
         brooks_financialBaselines: usePersistentState<T.FinancialBaseline[]>('brooks_financialBaselines', getInitialFinancialBaselines, skipLoad, { deferMs: 1850 }),
+        brooks_trainingRecords: usePersistentState<T.TrainingRecord[]>('brooks_trainingRecords', getInitialTrainingRecords, skipLoad, { deferMs: 1900 }),
         brooks_auditLog: usePersistentState<T.AuditLogEntry[]>('brooks_auditLog', getInitialAuditLog, skipLoad, { deferMs: 2000 }),
     };
     
@@ -252,6 +254,7 @@ export const useData = () => {
             inspectionTemplates: [], setInspectionTemplates: () => {},
             discountCodes: [], setDiscountCodes: () => {},
             financialBaselines: [], setFinancialBaselines: () => {},
+            trainingRecords: [], setTrainingRecords: () => {},
             forceRefresh: async () => {},
             isDataLoaded: true,
             saveRecord: async (_col: string, record: any) => record

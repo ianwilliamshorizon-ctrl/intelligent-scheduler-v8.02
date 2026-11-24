@@ -1277,3 +1277,16 @@ export interface FinancialBaseline {
     historicalRevenue?: number;
     historicalCostOfSales?: number;
 }
+
+export interface TrainingRecord {
+    id: string; // `${userId}__${moduleId}`
+    userId: string;
+    moduleId: string;
+    completedVersion: string;
+    score: number; // percentage 0-100
+    passed: boolean;
+    cpdMinutes: number;
+    attempts: number;
+    completedAt: string;
+    acknowledgedAt?: string;
+}

@@ -4,10 +4,11 @@ import { useData } from '../core/state/DataContext';
 import { 
     Menu, LogOut, Settings, Building2, UserCheck, LayoutDashboard, 
     Calendar, Wrench, Briefcase, FileText, ShoppingCart, Car, 
-    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone, MoveVertical, Headphones
+    Archive, Truck, MessageSquare, Phone, CalendarDays, GitPullRequest, Search, X, HelpCircle, Building, AlertCircle, BarChart3, Sparkles, Smartphone, MoveVertical, Headphones, Award
 } from 'lucide-react';
 import * as T from '../types';
 import { useAppSpacing } from '../core/hooks/useAppSpacing';
+import { getUserCpdSummary } from '../core/data/trainingModules';
 
 const MainLayout: React.FC<{ 
     children: React.ReactNode, 
@@ -278,13 +279,32 @@ const MainLayout: React.FC<{
                             <span className="hidden xl:inline text-[11px] font-semibold">{isAppSpacing ? 'App Spacing' : 'Compact'}</span>
                         </button>
 
-                         <button 
-                            onClick={onOpenHelpCentre} 
-                            data-action="help-centre"
-                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
-                        >
-                            <HelpCircle size={20} />
-                        </button>
+                         {(() => {
+                            const { trainingRecords } = useData();
+                            const cpd = getUserCpdSummary(currentUser, trainingRecords);
+                            const badgeClasses =
+                                cpd.refresherDueCount > 0
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
+                                    : cpd.percentComplete === 100
+                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                        : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100';
+                            return (
+                                <button
+                                    onClick={onOpenHelpCentre}
+                                    data-action="help-centre"
+                                    title="Open Help & CPD Training Studio"
+                                    className={`px-2.5 py-1.5 rounded-full border transition-colors flex items-center gap-1.5 text-xs font-bold cursor-pointer ${badgeClasses}`}
+                                >
+                                    <HelpCircle size={16} />
+                                    {cpd.requiredCount > 0 && (
+                                        <span className="hidden md:inline-flex items-center gap-1 text-[11px]">
+                                            <Award size={12} />
+                                            CPD {cpd.completedCurrentCount}/{cpd.requiredCount}
+                                        </span>
+                                    )}
+                                </button>
+                            );
+                        })()}
 
                         <div className="hidden sm:flex items-center gap-3">
                             <div className="flex flex-col items-end">
