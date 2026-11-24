@@ -5,6 +5,7 @@ import { Customer, Vehicle, Job, Estimate, Invoice } from '../../../types';
 import { PlusCircle, Trash2, Upload, RefreshCw, Search, Mail, Phone, MapPin, Copy } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { generateCustomerId, generateCustomerSearchField } from '../../../core/utils/customerUtils';
+import { isDuplicateCustomer } from '../../../core/utils/deduplicationUtils';
 import { parseCsv } from '../../../utils/csvUtils';
 import CustomerFormModal from '../../CustomerFormModal';
 import DuplicateCustomersModal from '../DuplicateCustomersModal';
@@ -116,7 +117,7 @@ const HighlightText = memo(({ text, highlight }: { text: string; highlight: stri
 });
 
 export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ searchTerm, onShowStatus, onViewVehicle }) => {
-    const { customers, setCustomers, vehicles, jobs, estimates, invoices, inquiries } = useData();
+    const { customers, setCustomers, vehicles, jobs, estimates, invoices, inquiries, forceRefresh } = useData();
     const { selectedIds, updateItem, deleteItem, toggleSelection, toggleSelectAll, bulkDelete } = useManagementTable(customers, 'brooks_customers', setCustomers);
     
     const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
@@ -164,47 +165,71 @@ export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ 
 
         try {
             const data = await parseCsv(file);
+            const importedCustomers: Customer[] = [];
             let addedCount = 0;
-            const existingIds = new Set(customers.map(c => c.id.toLowerCase()));
+            let duplicateCount = 0;
             const batchLimit = 400;
             let currentBatch = writeBatch(db);
+            let batchOps = 0;
 
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
-                const id = row.id || generateCustomerId(row.surname || 'New', customers);
-                
-                if (!existingIds.has(id.toLowerCase())) {
-                    const baseCustomer = {
-                        ...row,
-                        id: id,
-                        forename: row.forename || 'Unknown',
-                        surname: row.surname || 'Unknown',
-                        createdDate: row.createdDate || new Date().toISOString(),
-                        marketingConsent: row.marketingConsent === 'true' || false,
-                        serviceReminderConsent: row.serviceReminderConsent !== 'false'
-                    };
+                const id = row.id || generateCustomerId(row.surname || 'New', [...customers, ...importedCustomers]);
 
-                    const finalCustomer = {
-                        ...baseCustomer,
-                        searchField: generateCustomerSearchField(baseCustomer)
-                    };
+                const baseCustomer: Customer = {
+                    ...row,
+                    id,
+                    forename: row.forename || 'Unknown',
+                    surname: row.surname || 'Unknown',
+                    createdDate: row.createdDate || new Date().toISOString(),
+                    marketingConsent: row.marketingConsent === 'true' || row.marketingConsent === true,
+                    serviceReminderConsent: row.serviceReminderConsent !== 'false' && row.serviceReminderConsent !== false
+                };
 
-                    const docRef = doc(collection(db, 'brooks_customers'), id);
-                    currentBatch.set(docRef, finalCustomer);
-                    addedCount++;
+                const finalCustomer: Customer = {
+                    ...baseCustomer,
+                    searchField: generateCustomerSearchField(baseCustomer)
+                };
 
-                    if (addedCount > 0 && addedCount % batchLimit === 0) {
-                        await currentBatch.commit();
-                        currentBatch = writeBatch(db);
-                    }
+                const isDupInDb = customers.some(existing => isDuplicateCustomer(existing, finalCustomer));
+                const isDupInBatch = importedCustomers.some(imported => isDuplicateCustomer(imported, finalCustomer));
+
+                if (isDupInDb || isDupInBatch) {
+                    duplicateCount++;
+                    continue;
+                }
+
+                importedCustomers.push(finalCustomer);
+                const docRef = doc(collection(db, 'brooks_customers'), id);
+                currentBatch.set(docRef, finalCustomer);
+                addedCount++;
+                batchOps++;
+
+                if (batchOps >= batchLimit) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(db);
+                    batchOps = 0;
                 }
             }
 
-            if (addedCount % batchLimit !== 0) {
+            if (batchOps > 0) {
                 await currentBatch.commit();
             }
 
-            onShowStatus(addedCount > 0 ? `Successfully imported ${addedCount} customers.` : 'No new customers found.', 'success');
+            if (addedCount > 0) {
+                await forceRefresh('brooks_customers');
+                onShowStatus(
+                    `Successfully imported ${addedCount} customer(s).${duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) skipped)` : ''}`,
+                    'success'
+                );
+            } else {
+                onShowStatus(
+                    duplicateCount > 0
+                        ? `No new customers imported. ${duplicateCount} duplicate(s) skipped.`
+                        : 'No new customers found.',
+                    'info'
+                );
+            }
         } catch (err) {
             onShowStatus('Error importing customers.', 'error');
         } finally {

@@ -317,3 +317,139 @@ export const mergeVehicleData = (master: Vehicle, secondaryList: Vehicle[]): Veh
 
     return result;
 };
+
+const getComparablePhoneKeys = (c: Partial<Customer>): string[] => {
+    const keys: string[] = [];
+    for (const raw of [c.mobile, c.phone]) {
+        const norm = normalizePhone(raw);
+        if (norm.length >= 7) {
+            keys.push(norm.length > 8 ? norm.slice(-8) : norm);
+        }
+    }
+    return keys;
+};
+
+const isValidEmailForMatch = (email: string | null | undefined): string => {
+    const em = normalizeEmail(email);
+    if (!em || !em.includes('@') || em === 'noemail' || em === 'tbc' || em === 'none') return '';
+    return em;
+};
+
+const normalizeDateKey = (dateVal: string | null | undefined): string => {
+    if (!dateVal) return '';
+    return String(dateVal).trim().split('T')[0];
+};
+
+/**
+ * Checks whether two Customer records represent the same person/company.
+ */
+export const isDuplicateCustomer = (c1: Partial<Customer>, c2: Partial<Customer>): boolean => {
+    if (c1.id && c2.id && c1.id.trim().toLowerCase() === c2.id.trim().toLowerCase()) return true;
+
+    const e1 = isValidEmailForMatch(c1.email);
+    const e2 = isValidEmailForMatch(c2.email);
+    if (e1 && e2 && e1 === e2) return true;
+
+    const phones1 = getComparablePhoneKeys(c1);
+    const phones2 = getComparablePhoneKeys(c2);
+    if (phones1.some(p => phones2.includes(p))) return true;
+
+    const pc1 = String(c1.postcode || '').toUpperCase().replace(/\s/g, '');
+    const pc2 = String(c2.postcode || '').toUpperCase().replace(/\s/g, '');
+    const sur1 = normalizeName(c1.surname || c1.companyName || '');
+    const sur2 = normalizeName(c2.surname || c2.companyName || '');
+    if (pc1.length >= 4 && pc2.length >= 4 && pc1 === pc2 && sur1.length >= 3 && sur1 === sur2) {
+        return true;
+    }
+
+    // Full name / company match only when there are no conflicting contact details
+    const hasConflict =
+        (e1 && e2 && e1 !== e2) ||
+        (pc1.length >= 4 && pc2.length >= 4 && pc1 !== pc2);
+    if (!hasConflict) {
+        const full1 = normalizeName(`${c1.forename || ''}${c1.surname || ''}`);
+        const full2 = normalizeName(`${c2.forename || ''}${c2.surname || ''}`);
+        if (full1.length >= 4 && full1 === full2) return true;
+
+        const comp1 = normalizeName(c1.companyName || '');
+        const comp2 = normalizeName(c2.companyName || '');
+        if (comp1.length >= 4 && comp1 === comp2) return true;
+    }
+
+    return false;
+};
+
+/**
+ * Checks whether two Vehicle records represent the same vehicle (by ID, VRM, or VIN).
+ */
+export const isDuplicateVehicle = (v1: Partial<Vehicle>, v2: Partial<Vehicle>): boolean => {
+    if (v1.id && v2.id && v1.id.trim().toLowerCase() === v2.id.trim().toLowerCase()) return true;
+
+    const vrm1 = normalizeVRM(v1.registration);
+    const vrm2 = normalizeVRM(v2.registration);
+    const invalidVrms = new Set(['UNKNOWN', 'TBC', 'NEW', 'NA']);
+    if (vrm1.length >= 2 && !invalidVrms.has(vrm1) && vrm1 === vrm2) return true;
+
+    const vin1 = String(v1.vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const vin2 = String(v2.vin || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (
+        vin1.length >= 10 &&
+        vin2.length >= 10 &&
+        !vin1.startsWith('000000') &&
+        !vin1.includes('UNKNOWN') &&
+        vin1 === vin2
+    ) {
+        return true;
+    }
+
+    return false;
+};
+
+/**
+ * Checks whether two Job records represent the same job.
+ */
+export const isDuplicateJob = (j1: Partial<Job>, j2: Partial<Job>): boolean => {
+    if (j1.id && j2.id && j1.id.trim().toLowerCase() === j2.id.trim().toLowerCase()) return true;
+    if (j1.jobNumber && j2.jobNumber && j1.jobNumber.trim().toLowerCase() === j2.jobNumber.trim().toLowerCase()) {
+        return true;
+    }
+
+    const sameEntity = !j1.entityId || !j2.entityId || j1.entityId === j2.entityId;
+    const sameVehicle = !!j1.vehicleId && j1.vehicleId === j2.vehicleId && j1.vehicleId !== 'unknown_vehicle';
+    const sameCustomer = !!j1.customerId && j1.customerId === j2.customerId && j1.customerId !== 'unknown_customer';
+    const hasMatchableOwner = sameVehicle || sameCustomer;
+    const d1 = normalizeDateKey(j1.scheduledDate);
+    const d2 = normalizeDateKey(j2.scheduledDate);
+    const sameDesc = (j1.description || '').trim().toLowerCase() === (j2.description || '').trim().toLowerCase();
+
+    if (sameEntity && hasMatchableOwner && d1 && d1 === d2 && sameDesc) {
+        return true;
+    }
+
+    if (sameEntity && hasMatchableOwner && !d1 && !d2 && sameDesc) {
+        const c1 = normalizeDateKey(j1.createdAt);
+        const c2 = normalizeDateKey(j2.createdAt);
+        if (c1 && c1 === c2) return true;
+    }
+
+    return false;
+};
+
+/**
+ * Checks whether two Invoice records represent the same invoice.
+ */
+export const isDuplicateInvoice = (i1: Partial<Invoice>, i2: Partial<Invoice>): boolean => {
+    if (i1.id && i2.id && i1.id.trim().toLowerCase() === i2.id.trim().toLowerCase()) return true;
+    const num1 = (i1 as any).invoiceNumber;
+    const num2 = (i2 as any).invoiceNumber;
+    if (num1 && num2 && String(num1).trim().toLowerCase() === String(num2).trim().toLowerCase()) return true;
+
+    const sameEntity = !i1.entityId || !i2.entityId || i1.entityId === i2.entityId;
+    const sameVehicle = !!i1.vehicleId && i1.vehicleId === i2.vehicleId && i1.vehicleId !== 'unknown_vehicle';
+    const sameCustomer = !!i1.customerId && i1.customerId === i2.customerId && i1.customerId !== 'unknown_customer';
+    const hasMatchableOwner = sameVehicle || sameCustomer;
+    const sameDate = normalizeDateKey(i1.issueDate) === normalizeDateKey(i2.issueDate) && !!normalizeDateKey(i1.issueDate);
+    const sameTotal = Math.abs((i1.grandTotal || 0) - (i2.grandTotal || 0)) < 0.01;
+
+    return sameEntity && hasMatchableOwner && sameDate && sameTotal;
+};

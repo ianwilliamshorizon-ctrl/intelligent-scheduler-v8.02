@@ -6,6 +6,7 @@ import { PlusCircle, Trash2, Upload, RefreshCw, Search, Wand2, Copy } from 'luci
 import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
+import { isDuplicateVehicle, normalizeVRM, normalizeEmail, normalizePhone } from '../../../core/utils/deduplicationUtils';
 import VehicleFormModal from '../../VehicleFormModal';
 import DuplicateVehiclesModal from '../DuplicateVehiclesModal';
 import { db, saveDocument } from '../../../core/db';
@@ -253,37 +254,72 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
         onShowStatus("Processing batch vehicle import...", "info");
         try {
             const data = await parseCsv(file);
+            const importedVehicles: Vehicle[] = [];
             let count = 0;
-            let batchCount = 0; // FIXED: Added declaration
-            const existingIds = new Set(vehicles.map(v => v.id));
+            let duplicateCount = 0;
+            let batchCount = 0;
             const batchLimit = 400;
             let currentBatch = writeBatch(db);
 
             for (const row of data) {
                 const id = row.id || crypto.randomUUID();
-                if (!existingIds.has(id)) {
-                    const vehicleData = {
-                        ...row,
-                        id,
-                        registration: String(row.registration || '').toUpperCase().replace(/\s/g, ''),
-                        make: String(row.make || 'Unknown'),
-                        model: String(row.model || 'Unknown'),
-                        colour: row.colour || row.Color || row.Colour || row.color || 'Silver',
-                        customerId: row.customerId || 'unknown_owner',
-                    };
-                    currentBatch.set(doc(collection(db, 'brooks_vehicles'), id), vehicleData);
-                    count++;
-                    batchCount++; // FIXED: Tracking current batch size
+                let resolvedCustomerId = row.customerId || '';
+                if (!resolvedCustomerId) {
+                    const rowEmail = normalizeEmail(row.customerEmail);
+                    const rowPhone = normalizePhone(row.customerPhone);
+                    const rowName = String(row.customerName || '').trim().toLowerCase();
+                    const matchedCustomer = customers.find(c =>
+                        (rowEmail && normalizeEmail(c.email) === rowEmail) ||
+                        (rowPhone.length >= 7 && (normalizePhone(c.mobile).endsWith(rowPhone.slice(-8)) || normalizePhone(c.phone).endsWith(rowPhone.slice(-8)))) ||
+                        (rowName && `${c.forename} ${c.surname}`.trim().toLowerCase() === rowName)
+                    );
+                    resolvedCustomerId = matchedCustomer?.id || 'unknown_owner';
+                }
 
-                    if (batchCount >= batchLimit) {
-                        await currentBatch.commit();
-                        currentBatch = writeBatch(db);
-                        batchCount = 0;
-                    }
+                const vehicleData: Vehicle = {
+                    ...row,
+                    id,
+                    registration: normalizeVRM(row.registration),
+                    make: String(row.make || 'Unknown'),
+                    model: String(row.model || 'Unknown'),
+                    colour: row.colour || row.Color || row.Colour || row.color || 'Silver',
+                    customerId: resolvedCustomerId,
+                };
+
+                const isDupInDb = vehicles.some(existing => isDuplicateVehicle(existing, vehicleData));
+                const isDupInBatch = importedVehicles.some(imported => isDuplicateVehicle(imported, vehicleData));
+
+                if (isDupInDb || isDupInBatch) {
+                    duplicateCount++;
+                    continue;
+                }
+
+                importedVehicles.push(vehicleData);
+                currentBatch.set(doc(collection(db, 'brooks_vehicles'), id), vehicleData);
+                count++;
+                batchCount++;
+
+                if (batchCount >= batchLimit) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(db);
+                    batchCount = 0;
                 }
             }
             if (batchCount > 0) await currentBatch.commit();
-            onShowStatus(count > 0 ? `Imported ${count} vehicles.` : 'No new vehicles found.', 'success');
+            if (count > 0) {
+                await forceRefresh('brooks_vehicles');
+                onShowStatus(
+                    `Imported ${count} vehicle(s).${duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) skipped)` : ''}`,
+                    'success'
+                );
+            } else {
+                onShowStatus(
+                    duplicateCount > 0
+                        ? `No new vehicles imported. ${duplicateCount} duplicate(s) skipped.`
+                        : 'No new vehicles found.',
+                    'info'
+                );
+            }
         } catch (err) {
             onShowStatus('Import failed.', 'error');
         } finally {

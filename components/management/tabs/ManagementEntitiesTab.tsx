@@ -9,6 +9,7 @@ import { useManagementTable } from '../hooks/useManagementTable';
 import { parseCsv } from '../../../utils/csvUtils';
 import { generateJobId, generateInvoiceId } from '../../../core/utils/numberGenerators';
 import { splitJobIntoSegments, formatDate } from '../../../core/utils/dateUtils';
+import { isDuplicateJob, isDuplicateInvoice, normalizeVRM } from '../../../core/utils/deduplicationUtils';
 import { saveDocument, deleteDocument } from '../../../core/db';
 
 const isInvalidDate = (dateVal: any): boolean => {
@@ -21,40 +22,6 @@ const isInvalidDate = (dateVal: any): boolean => {
     }
     const parsed = Date.parse(dateStr);
     return isNaN(parsed);
-};
-
-const isDuplicateJob = (j1: Job, j2: Job): boolean => {
-    if (j1.id === j2.id) return true;
-    const sameEntity = j1.entityId === j2.entityId;
-    const sameVehicle = j1.vehicleId === j2.vehicleId && j1.vehicleId !== 'unknown_vehicle';
-    const sameCustomer = j1.customerId === j2.customerId && j1.customerId !== 'unknown_customer';
-    const hasMatchableOwner = sameVehicle || sameCustomer;
-    const sameDate = j1.scheduledDate === j2.scheduledDate;
-    const sameDesc = (j1.description || '').trim().toLowerCase() === (j2.description || '').trim().toLowerCase();
-    
-    if (sameEntity && hasMatchableOwner && sameDate && sameDesc) {
-        return true;
-    }
-    
-    if (sameEntity && hasMatchableOwner && !j1.scheduledDate && !j2.scheduledDate && sameDesc) {
-        const d1 = j1.createdAt ? j1.createdAt.split('T')[0] : '';
-        const d2 = j2.createdAt ? j2.createdAt.split('T')[0] : '';
-        if (d1 && d1 === d2) return true;
-    }
-    
-    return false;
-};
-
-const isDuplicateInvoice = (i1: Invoice, i2: Invoice): boolean => {
-    if (i1.id === i2.id) return true;
-    const sameEntity = i1.entityId === i2.entityId;
-    const sameVehicle = i1.vehicleId === i2.vehicleId && i1.vehicleId !== 'unknown_vehicle';
-    const sameCustomer = i1.customerId === i2.customerId && i1.customerId !== 'unknown_customer';
-    const hasMatchableOwner = sameVehicle || sameCustomer;
-    const sameDate = i1.issueDate === i2.issueDate;
-    const sameTotal = Math.abs((i1.grandTotal || 0) - (i2.grandTotal || 0)) < 0.01;
-    
-    return sameEntity && hasMatchableOwner && sameDate && sameTotal;
 };
 
 interface ManagementEntitiesTabProps {
@@ -125,8 +92,8 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
             let invalidCount = 0;
             
             for (const row of data) {
-                const reg = (row.registration || '').toUpperCase().replace(/\s/g, '');
-                const vehicle = (vehicles || []).find(v => v.registration === reg);
+                const reg = normalizeVRM(row.registration);
+                const vehicle = reg ? (vehicles || []).find(v => normalizeVRM(v.registration) === reg) : undefined;
                 const customer = (customers || []).find(c => 
                     (vehicle && c.id === vehicle.customerId) || 
                     (row.customerName && `${c.forename} ${c.surname}`.toLowerCase().includes(String(row.customerName).toLowerCase()))
@@ -214,8 +181,8 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
             let duplicateCount = 0;
             
             for (const row of data) {
-                const reg = (row.registration || '').toUpperCase().replace(/\s/g, '');
-                const vehicle = (vehicles || []).find(v => v.registration === reg);
+                const reg = normalizeVRM(row.registration);
+                const vehicle = reg ? (vehicles || []).find(v => normalizeVRM(v.registration) === reg) : undefined;
                 const customer = (customers || []).find(c => (vehicle && c.id === vehicle.customerId) || (row.customerName && `${c.forename} ${c.surname}`.toLowerCase().includes(String(row.customerName).toLowerCase())));
                 
                 const tempInvoiceId = row.id || generateInvoiceId([...(invoices || []), ...importedInvoices], entityShortCode);
