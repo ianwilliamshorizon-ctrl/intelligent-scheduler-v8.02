@@ -1598,9 +1598,9 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                                   example: step.example
                                 })
                               }
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-500/25 transition flex items-center gap-1.5 cursor-pointer font-mono"
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition flex items-center gap-1.5 cursor-pointer"
                             >
-                              <Layers className="w-3.5 h-3.5 text-indigo-400" />
+                              <Layers className="w-3.5 h-3.5 text-indigo-600" />
                               <span>Visual Illustration</span>
                             </button>
                           </div>
@@ -1611,15 +1611,15 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                 </div>
 
                 {/* 4. COMPLIANCE & OPERATIONAL PRO-TIP BOX */}
-                <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/10 to-transparent border border-amber-500/30 rounded-2xl p-5 flex items-start gap-4">
-                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0 mt-0.5">
                     <Info className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+                    <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">
                       Workshop Dispatch &amp; Engineering Pro-Tip
                     </h4>
-                    <p className="text-xs text-slate-300 leading-relaxed mt-1">
+                    <p className="text-xs text-amber-900/85 leading-relaxed mt-1">
                       {currentSection.proTip}
                     </p>
                   </div>
@@ -1781,14 +1781,14 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                                         desc: 'Interactive vector schematic rendered directly inside the SOP guide.'
                                       })
                                     }
-                                    className="my-5 bg-slate-900/90 border border-slate-700/80 hover:border-amber-400/60 rounded-2xl p-4 cursor-zoom-in group transition shadow-lg"
+                                    className="my-5 bg-gray-50 border border-gray-200 hover:border-indigo-400 rounded-2xl p-4 cursor-zoom-in group transition shadow-2xs"
                                   >
                                     <div className="flex items-center justify-between mb-2.5">
-                                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
+                                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-indigo-700 flex items-center gap-1.5">
                                         <Sparkles className="w-3.5 h-3.5" />
                                         Interactive Visual Schematic
                                       </span>
-                                      <span className="text-[10px] font-mono text-slate-400 group-hover:text-amber-300 flex items-center gap-1 transition">
+                                      <span className="text-[10px] font-mono text-gray-500 group-hover:text-indigo-700 flex items-center gap-1 transition">
                                         <ZoomIn className="w-3.5 h-3.5" />
                                         Click to Enlarge
                                       </span>
@@ -1799,7 +1799,7 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                               }
                             }
                             return (
-                              <pre className="bg-slate-900 border border-slate-800 rounded-xl p-4 overflow-x-auto my-4 text-xs text-slate-200 font-mono" {...props}>
+                              <pre className="bg-gray-50 border border-gray-200 rounded-xl p-4 overflow-x-auto my-4 text-xs text-gray-800 font-mono" {...props}>
                                 {children}
                               </pre>
                             );
@@ -1809,21 +1809,21 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                               return <code className={className} {...props}>{children}</code>;
                             }
                             return (
-                              <code className="bg-slate-800 text-amber-300 font-mono text-xs px-1.5 py-0.5 rounded border border-slate-700" {...props}>
+                              <code className="bg-indigo-50 text-indigo-800 font-mono text-xs px-1.5 py-0.5 rounded border border-indigo-200" {...props}>
                                 {children}
                               </code>
                             );
                           },
                           table: ({ ...props }) => (
                             <div className="overflow-x-auto my-4">
-                              <table className="w-full text-xs text-left border-collapse border border-slate-800 rounded-lg overflow-hidden" {...props} />
+                              <table className="w-full text-xs text-left border-collapse border border-gray-200 rounded-lg overflow-hidden" {...props} />
                             </div>
                           ),
                           th: ({ ...props }) => (
-                            <th className="bg-slate-800 p-2.5 font-bold text-slate-200 border border-slate-700" {...props} />
+                            <th className="bg-gray-100 p-2.5 font-bold text-gray-800 border border-gray-200" {...props} />
                           ),
                           td: ({ ...props }) => (
-                            <td className="p-2.5 text-slate-300 border border-slate-800 bg-slate-900/50" {...props} />
+                            <td className="p-2.5 text-gray-700 border border-gray-200 bg-white" {...props} />
                           ),
                           img: ({ ...props }) => (
                             <div
@@ -1833,9 +1833,9 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                               <img
                                 {...props}
                                 alt={props.alt || 'SOP Diagram'}
-                                className="max-w-full rounded-xl border border-slate-800 shadow-lg group-hover:opacity-90 transition"
+                                className="max-w-full rounded-xl border border-gray-200 shadow-sm group-hover:opacity-90 transition"
                               />
-                              <div className="absolute top-3 right-3 bg-slate-900/80 p-1.5 rounded-lg text-amber-400 opacity-0 group-hover:opacity-100 transition shadow">
+                              <div className="absolute top-3 right-3 bg-white/90 p-1.5 rounded-lg text-indigo-600 opacity-0 group-hover:opacity-100 transition shadow">
                                 <ZoomIn className="w-4 h-4" />
                               </div>
                             </div>
@@ -1846,24 +1846,24 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                       </ReactMarkdown>
                     </div>
 
-                    <div className="pt-4 border-t border-slate-800 flex items-center justify-between">
+                    <div className="pt-4 border-t border-gray-200 flex items-center justify-between">
                       <button
                         onClick={() => setViewMode('visual')}
-                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer font-mono"
+                        className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer"
                       >
-                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                        <Zap className="w-3.5 h-3.5 text-indigo-600" />
                         Switch to Visual Studio
                       </button>
                       <button
                         onClick={onClose}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition cursor-pointer font-mono"
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition cursor-pointer"
                       >
                         Close
                       </button>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-20 text-slate-400">
+                  <div className="text-center py-20 text-gray-400">
                     <FileText className="w-12 h-12 mx-auto mb-3 opacity-40" />
                     <p className="text-sm">Select an SOP document from the sidebar to view full procedures.</p>
                   </div>
@@ -1877,71 +1877,69 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
       {/* TASK ILLUSTRATION & EXAMPLE LIGHTBOX MODAL */}
       {activeIllustrationModal && (
         <div
-          className="fixed inset-0 z-[10000] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in font-sans"
+          className="fixed inset-0 z-[10000] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6 overflow-y-auto animate-fade-in font-sans"
           onClick={() => setActiveIllustrationModal(null)}
         >
           <div
-            className="bg-slate-900 border border-slate-700 rounded-3xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-white"
+            className="bg-white border border-gray-200 rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col overflow-hidden shadow-2xl text-gray-900"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-6 py-4 bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 border-b border-slate-800 flex items-center justify-between gap-4 shrink-0">
+            <div className="px-6 py-4 bg-white border-b border-gray-200 flex items-center justify-between gap-4 shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/40 flex items-center justify-center text-indigo-300 font-mono font-bold text-sm shrink-0">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-700 font-mono font-bold text-sm shrink-0">
                   #{activeIllustrationModal.stepNumber}
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono bg-indigo-500/20 text-indigo-300 border border-indigo-500/40 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                    <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
                       Interactive Task Illustration
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="text-[10px] font-mono text-gray-500">
                       {activeIllustrationModal.subtitle}
                     </span>
                   </div>
-                  <h3 className="text-base font-bold text-white mt-0.5">
+                  <h3 className="text-base font-bold text-gray-900 mt-0.5">
                     {activeIllustrationModal.title}
                   </h3>
                 </div>
               </div>
               <button
                 onClick={() => setActiveIllustrationModal(null)}
-                className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl transition cursor-pointer"
+                className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 rounded-xl transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-6 flex-1 bg-slate-950/70">
-              <p className="text-xs text-slate-300 leading-relaxed bg-slate-900/80 p-3.5 rounded-xl border border-slate-800">
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 bg-gray-50">
+              <p className="text-xs text-gray-700 leading-relaxed bg-white p-3.5 rounded-xl border border-gray-200">
                 {activeIllustrationModal.desc}
               </p>
 
-              {/* Task Schematic Diagram */}
-              <div className="bg-slate-950 border border-slate-800 rounded-2xl p-4 shadow-inner overflow-x-auto">
-                {renderTaskIllustrationSvg(activeIllustrationModal.id)}
-              </div>
+              {/* Real Page Interactive Replay */}
+              <ShowMePlayer module={activeTrainingModule} />
 
               {/* Scenario Data Sheet */}
               {activeIllustrationModal.example && (
-                <div className="bg-slate-900/90 border border-amber-500/30 rounded-2xl p-5 space-y-3 shadow-lg">
+                <div className="bg-amber-50/70 border border-amber-200 rounded-2xl p-5 space-y-3">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded uppercase">
+                    <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded uppercase">
                       {activeIllustrationModal.example.badge}
                     </span>
-                    <span className="text-xs font-bold text-amber-300 font-mono">
+                    <span className="text-xs font-bold text-amber-900 font-mono">
                       {activeIllustrationModal.example.title}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-200 leading-relaxed italic bg-slate-950/70 p-3 rounded-xl border border-slate-800/80">
+                  <p className="text-xs text-gray-700 leading-relaxed italic bg-white p-3 rounded-xl border border-amber-200/80">
                     "{activeIllustrationModal.example.scenario}"
                   </p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                     {activeIllustrationModal.example.dataPoints.map((dp, idx) => (
-                      <div key={idx} className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 flex items-center justify-between text-xs">
-                        <span className="text-slate-400 font-mono font-medium">{dp.key}:</span>
-                        <span className="text-emerald-400 font-bold font-mono">{dp.val}</span>
+                      <div key={idx} className="bg-white px-3 py-2 rounded-lg border border-gray-200 flex items-center justify-between text-xs">
+                        <span className="text-gray-500 font-mono font-medium">{dp.key}:</span>
+                        <span className="text-emerald-700 font-bold font-mono">{dp.val}</span>
                       </div>
                     ))}
                   </div>
@@ -1950,7 +1948,7 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-3.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between gap-3">
+            <div className="px-6 py-3.5 bg-white border-t border-gray-200 flex items-center justify-between gap-3">
               <button
                 onClick={() => {
                   setActiveIllustrationModal(null);
@@ -1958,14 +1956,14 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                   const firstTimeSop = sops.find((s) => s.file === '00-first-time-user-guide.md');
                   if (firstTimeSop) setSelectedSop(firstTimeSop);
                 }}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer font-mono"
+                className="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer"
               >
-                <BookOpen className="w-4 h-4 text-indigo-400" />
+                <BookOpen className="w-4 h-4 text-indigo-600" />
                 Read Full SOP Guide
               </button>
               <button
                 onClick={() => setActiveIllustrationModal(null)}
-                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl text-xs transition cursor-pointer font-mono shadow-md"
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition cursor-pointer shadow-xs"
               >
                 Done
               </button>
