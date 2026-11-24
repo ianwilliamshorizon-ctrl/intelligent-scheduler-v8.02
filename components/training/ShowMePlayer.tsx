@@ -1,30 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Play, Pause, RotateCcw, ChevronLeft, ChevronRight, MousePointer2, Sparkles, CheckCircle2 } from 'lucide-react';
-import { TrainingModule, ShowMeMockElement } from '../../core/data/trainingModules';
+import { TrainingModule } from '../../core/data/trainingModules';
+import { ShowMeRealScreen } from './ShowMeRealScreens';
 
 interface ShowMePlayerProps {
     module: TrainingModule;
     onComplete?: () => void;
 }
-
-const getToneClasses = (tone: ShowMeMockElement['tone'], isTarget: boolean) => {
-    const base =
-        tone === 'indigo'
-            ? 'bg-indigo-50 border-indigo-200 text-indigo-950'
-            : tone === 'emerald'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                : tone === 'amber'
-                    ? 'bg-amber-50 border-amber-200 text-amber-950'
-                    : tone === 'rose'
-                        ? 'bg-rose-50 border-rose-200 text-rose-950'
-                        : 'bg-white border-gray-200 text-gray-800';
-
-    const ring = isTarget
-        ? 'ring-2 ring-indigo-600 shadow-md scale-[1.03]'
-        : 'opacity-90';
-
-    return `${base} ${ring}`;
-};
 
 export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }) => {
     const steps = module.showMeSteps || [];
@@ -153,30 +135,13 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                     </span>
                 </div>
 
-                {/* Mock UI Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 relative z-10 my-2">
-                    {currentStep.elements.map(el => {
-                        const isTarget = el.id === currentStep.targetId;
-                        return (
-                            <div
-                                key={el.id}
-                                className={`p-3.5 rounded-xl border transition-all duration-500 ${getToneClasses(el.tone, isTarget)}`}
-                            >
-                                <div className="text-[10px] uppercase tracking-wider font-semibold opacity-70 mb-1">
-                                    {el.label}
-                                </div>
-                                <div className="text-xs font-bold leading-snug">
-                                    {el.value}
-                                </div>
-                                {isTarget && (
-                                    <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
-                                        {currentStep.targetLabel}
-                                    </div>
-                                )}
-                            </div>
-                        );
-                    })}
+                {/* Real Page Replica */}
+                <div className="relative z-10 my-1">
+                    <ShowMeRealScreen
+                        moduleId={module.id}
+                        stepIndex={stepIndex}
+                        targetId={currentStep.targetId}
+                    />
                 </div>
 
                 {/* Toast Preview */}
