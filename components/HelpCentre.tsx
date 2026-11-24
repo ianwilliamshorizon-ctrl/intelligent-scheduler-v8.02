@@ -869,26 +869,26 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fade-in font-sans">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-[1550px] w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl text-white">
+    <div className="fixed inset-0 z-[9999] bg-gray-900/60 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto animate-fade-in font-sans">
+      <div className="bg-white border border-gray-200 rounded-2xl max-w-[1550px] w-full max-h-[94vh] flex flex-col overflow-hidden shadow-2xl text-gray-900">
         
         {/* MODAL HEADER */}
-        <div className="px-6 py-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-slate-800 flex flex-wrap items-center justify-between gap-4 shrink-0">
+        <div className="px-6 py-4 bg-white border-b border-gray-200 flex flex-wrap items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-2xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
+            <div className="w-11 h-11 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-sm shrink-0">
               <BookOpen className="w-6 h-6" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] font-mono bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
-                  Visual Features Studio
+                <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded font-bold uppercase tracking-wider">
+                  Help &amp; CPD Training Studio
                 </span>
-                <span className="text-[10px] font-mono bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-bold">
-                  INTELLIGENT SCHEDULER V8.02 LIVE
+                <span className="text-[10px] font-mono bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-bold">
+                  INTELLIGENT SCHEDULER V8.02
                 </span>
               </div>
-              <h1 className="text-lg font-black tracking-tight text-white mt-0.5">
-                Intelligent Scheduler Visual Help, Diagrams & Feature Walkthrough
+              <h1 className="text-lg font-black tracking-tight text-gray-900 mt-0.5">
+                Brookspeed System Guide, Animated Walkthroughs &amp; Staff CPD
               </h1>
             </div>
           </div>
@@ -896,56 +896,56 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
           {/* MODE TOGGLE & SEARCH & CLOSE */}
           <div className="flex items-center gap-3">
             {/* View Mode Switcher */}
-            <div className="bg-slate-950/80 p-1 rounded-xl border border-slate-800 flex items-center gap-1">
+            <div className="bg-gray-100 p-1 rounded-xl border border-gray-200 flex items-center gap-1">
               <button
                 onClick={() => setViewMode('visual')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'visual'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Zap className="w-3.5 h-3.5 text-amber-400" />
+                <Zap className="w-3.5 h-3.5" />
                 Visual Studio
               </button>
               <button
                 onClick={() => setViewMode('showme')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'showme'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <Play className="w-3.5 h-3.5 text-emerald-400" />
+                <Play className="w-3.5 h-3.5" />
                 Show Me Replay
               </button>
               <button
                 onClick={() => setViewMode('sop')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                   viewMode === 'sop'
-                    ? 'bg-indigo-600 text-white shadow'
-                    : 'text-slate-400 hover:text-white'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                <FileSpreadsheet className="w-3.5 h-3.5 text-indigo-300" />
+                <FileSpreadsheet className="w-3.5 h-3.5" />
                 SOP Library ({sops.length})
               </button>
             </div>
 
             {/* Search Input */}
             <div className="relative hidden sm:block w-64">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search help features..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl pl-9 pr-7 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-amber-400 font-mono"
+                className="w-full bg-gray-50 border border-gray-200 rounded-xl pl-9 pr-7 py-1.5 text-xs text-gray-900 placeholder-gray-400 outline-none focus:border-indigo-500 focus:bg-white"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -955,7 +955,7 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
             {/* Close Button */}
             <button
               onClick={onClose}
-              className="p-2.5 bg-slate-800 hover:bg-slate-700 active:bg-slate-600 text-slate-300 hover:text-white rounded-2xl transition cursor-pointer"
+              className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-900 rounded-xl transition cursor-pointer"
               title="Close Guide"
             >
               <X className="w-5 h-5" />
@@ -969,34 +969,34 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
           {(viewMode === 'visual' || viewMode === 'showme') && (
             <>
               {/* SIDEBAR MODULE SELECTOR */}
-              <div className="w-full md:w-84 bg-slate-950/70 border-b md:border-b-0 md:border-r border-slate-800 p-4 overflow-y-auto space-y-2 shrink-0">
+              <div className="w-full md:w-84 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-4 overflow-y-auto space-y-2 shrink-0">
                 {currentUser && (
-                  <div className="p-3 rounded-2xl bg-slate-900 border border-indigo-500/30 mb-3 space-y-1.5">
+                  <div className="p-3 rounded-xl bg-white border border-indigo-200 mb-3 space-y-1.5 shadow-2xs">
                     <div className="flex items-center justify-between text-[11px] font-bold">
-                      <span className="text-indigo-300 flex items-center gap-1.5">
+                      <span className="text-indigo-700 flex items-center gap-1.5">
                         <Award className="w-3.5 h-3.5" /> My CPD Progress
                       </span>
-                      <span className="text-white font-mono">
+                      <span className="text-gray-900 font-mono">
                         {cpdSummary.completedCurrentCount}/{cpdSummary.requiredCount} ({cpdSummary.percentComplete}%)
                       </span>
                     </div>
-                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                    <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 transition-all"
+                        className="h-full bg-indigo-600 transition-all"
                         style={{ width: `${cpdSummary.percentComplete}%` }}
                       />
                     </div>
-                    <div className="text-[10px] text-slate-400 flex justify-between">
+                    <div className="text-[10px] text-gray-500 flex justify-between">
                       <span>{cpdSummary.totalCpdMinutes} CPD mins logged</span>
                       {cpdSummary.refresherDueCount > 0 && (
-                        <span className="text-amber-400 font-semibold">{cpdSummary.refresherDueCount} refresher due</span>
+                        <span className="text-amber-700 font-semibold">{cpdSummary.refresherDueCount} refresher due</span>
                       )}
                     </div>
                   </div>
                 )}
-                <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+                <div className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
                   <span>Core Modules & Capabilities ({filteredSections.length})</span>
-                  <span className="text-amber-400">V8.02</span>
+                  <span className="text-indigo-600">V8.02</span>
                 </div>
 
                 {filteredSections.map((sec) => {
@@ -1008,15 +1008,15 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                     <button
                       key={sec.id}
                       onClick={() => setActiveTab(sec.id)}
-                      className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${
+                      className={`w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 cursor-pointer ${
                         isActive
-                          ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900 border-indigo-500 shadow-lg text-white'
-                          : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-850 hover:border-slate-700 text-slate-300'
+                          ? 'bg-indigo-50 border-indigo-400 shadow-xs text-gray-900'
+                          : 'bg-white border-gray-200 hover:bg-gray-100/70 hover:border-gray-300 text-gray-700'
                       }`}
                     >
                       <div
                         className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                          isActive ? 'bg-indigo-500 text-white shadow-md' : 'bg-slate-800 text-slate-400'
+                          isActive ? 'bg-indigo-600 text-white shadow-xs' : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         <Icon className="w-5 h-5" />
@@ -1024,17 +1024,12 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-1">
                           <span className="text-xs font-bold truncate">{sec.title}</span>
-                          {modStatus === 'current' && <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" title="CPD Current" />}
-                          {modStatus === 'refresher_due' && <span className="w-2 h-2 rounded-full bg-amber-400 shrink-0" title="CPD Refresher Due" />}
+                          {modStatus === 'current' && <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="CPD Current" />}
+                          {modStatus === 'refresher_due' && <span className="w-2 h-2 rounded-full bg-amber-500 shrink-0" title="CPD Refresher Due" />}
                         </div>
-                        <p className="text-[11px] text-slate-400 line-clamp-1 mt-0.5">
+                        <p className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
                           {sec.subtitle}
                         </p>
-                        <span
-                          className={`inline-block text-[9px] font-mono font-bold px-2 py-0.5 rounded border mt-1.5 ${sec.badgeColor}`}
-                        >
-                          {sec.badge}
-                        </span>
                       </div>
                     </button>
                   );
@@ -1042,24 +1037,22 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
               </div>
 
               {/* MAIN DETAIL PANEL */}
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-8 bg-slate-900/90">
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 bg-gray-50/70">
                 {/* 1. SECTION TITLE & PURPOSE BANNER */}
-                <div className="bg-gradient-to-r from-slate-950 via-indigo-950/60 to-slate-950 border border-slate-800 rounded-3xl p-6 md:p-8 space-y-3 shadow-xl">
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-2 shadow-2xs">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span
-                      className={`text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg border uppercase tracking-wider ${currentSection.badgeColor}`}
-                    >
+                    <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-lg border bg-indigo-50 text-indigo-700 border-indigo-200 uppercase tracking-wider">
                       {currentSection.badge}
                     </span>
-                    <span className="text-xs font-mono text-amber-400 flex items-center gap-1.5">
-                      <Sparkles className="w-4 h-4 animate-spin-slow" />
-                      UK Workshop Standard & FCS Certified
+                    <span className="text-xs font-semibold text-gray-500 flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-indigo-600" />
+                      Brookspeed Workshop Standard
                     </span>
                   </div>
-                  <h2 className="text-2xl font-black tracking-tight text-white">
+                  <h2 className="text-2xl font-black tracking-tight text-gray-900">
                     {currentSection.title}
                   </h2>
-                  <p className="text-sm text-slate-300 leading-relaxed max-w-4xl">
+                  <p className="text-sm text-gray-600 leading-relaxed max-w-4xl">
                     {currentSection.description}
                   </p>
                 </div>
@@ -1067,16 +1060,16 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                 {/* 2. HIGH-FIDELITY ARCHITECTURAL & UI PICTURE / SVG SCHEMATIC */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-amber-400" />
-                      Visual Architecture & Operating Picture
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-700 flex items-center gap-2">
+                      <Zap className="w-4 h-4 text-indigo-600" />
+                      Visual Architecture &amp; Operating Picture
                     </h3>
-                    <span className="text-[10px] font-mono text-slate-400">
-                      Interactive SVG Schematic & Flow Diagram
+                    <span className="text-[10px] font-mono text-gray-500">
+                      Interactive Schematic &amp; Flow Diagram
                     </span>
                   </div>
 
-                  <div className="bg-slate-950 border-2 border-slate-800 rounded-3xl p-6 md:p-8 shadow-inner overflow-x-auto">
+                  <div className="bg-white border border-gray-200 rounded-2xl p-5 shadow-2xs overflow-x-auto">
                     {/* SVG PICTURE 0: FIRST-TIME USER ORIENTATION & CORE OPERATING PICTURE */}
                     {currentSection.id === 'first-time-user' && (
                       <svg
@@ -1521,12 +1514,12 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                 {/* 3. STEP-BY-STEP WORKFLOW GUIDE WITH INTERACTIVE EXAMPLES & ILLUSTRATIONS */}
                 <div className="space-y-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-800 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600" />
                       Step-by-Step Operating Instructions &amp; Interactive Illustrations
                     </h3>
-                    <span className="text-[11px] font-mono text-slate-400">
-                      Click <span className="text-amber-300 font-bold">"View Example"</span> or <span className="text-indigo-300 font-bold">"Visual Illustration"</span> on any task
+                    <span className="text-[11px] text-gray-500">
+                      Click <span className="text-amber-700 font-bold">"View Example"</span> or <span className="text-indigo-700 font-bold">"Visual Illustration"</span> on any task
                     </span>
                   </div>
 
@@ -1538,40 +1531,40 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                       return (
                         <div
                           key={idx}
-                          className="bg-slate-950/80 border border-slate-800 rounded-2xl p-5 space-y-3 hover:border-slate-700 transition flex flex-col justify-between"
+                          className="bg-white border border-gray-200 rounded-2xl p-5 space-y-3 hover:border-indigo-300 transition flex flex-col justify-between shadow-2xs"
                         >
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <span className="w-7 h-7 rounded-lg bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 flex items-center justify-center font-mono font-bold text-xs shrink-0">
+                              <span className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center justify-center font-mono font-bold text-xs shrink-0">
                                 {idx + 1}
                               </span>
-                              <h4 className="text-sm font-bold text-white">{step.title}</h4>
+                              <h4 className="text-sm font-bold text-gray-900">{step.title}</h4>
                             </div>
-                            <p className="text-xs text-slate-300 leading-relaxed pl-9">
+                            <p className="text-xs text-gray-600 leading-relaxed pl-9">
                               {step.desc}
                             </p>
                           </div>
 
                           {/* INLINE EXPANDED EXAMPLE BOX */}
                           {step.example && isExampleOpen && (
-                            <div className="mt-3 ml-2 sm:ml-9 p-3.5 bg-slate-900 border border-amber-500/30 rounded-xl space-y-2.5 animate-fade-in shadow-inner">
+                            <div className="mt-3 ml-2 sm:ml-9 p-3.5 bg-amber-50/70 border border-amber-200 rounded-xl space-y-2.5 animate-fade-in">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-[10px] font-mono font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded uppercase">
+                                <span className="text-[10px] font-mono font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 rounded uppercase">
                                   {step.example.badge}
                                 </span>
-                                <span className="text-[10px] font-mono text-slate-400 font-bold">
+                                <span className="text-[10px] font-mono text-gray-600 font-bold">
                                   {step.example.title}
                                 </span>
                               </div>
-                              <p className="text-[11px] text-slate-300 leading-relaxed italic bg-slate-950/60 p-2 rounded-lg border border-slate-800">
+                              <p className="text-[11px] text-gray-700 leading-relaxed italic bg-white p-2 rounded-lg border border-amber-200/80">
                                 "{step.example.scenario}"
                               </p>
                               {step.example.dataPoints && step.example.dataPoints.length > 0 && (
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
                                   {step.example.dataPoints.map((dp, dIdx) => (
-                                    <div key={dIdx} className="bg-slate-950/80 px-2 py-1 rounded border border-slate-800 flex items-center justify-between text-[10px] gap-2">
-                                      <span className="text-slate-400 font-mono font-medium truncate">{dp.key}:</span>
-                                      <span className="text-emerald-400 font-bold truncate">{dp.val}</span>
+                                    <div key={dIdx} className="bg-white px-2 py-1 rounded border border-gray-200 flex items-center justify-between text-[10px] gap-2">
+                                      <span className="text-gray-500 font-mono font-medium truncate">{dp.key}:</span>
+                                      <span className="text-emerald-700 font-bold truncate">{dp.val}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1580,17 +1573,17 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                           )}
 
                           {/* INTERACTIVE ACTION BUTTONS */}
-                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800/80 pl-2 sm:pl-9">
+                          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100 pl-2 sm:pl-9">
                             {step.example && (
                               <button
                                 onClick={() => toggleStepExample(stepKey)}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition flex items-center gap-1.5 cursor-pointer font-mono ${
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border transition flex items-center gap-1.5 cursor-pointer ${
                                   isExampleOpen
-                                    ? 'bg-amber-500/30 text-amber-200 border-amber-500/60 shadow'
-                                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30 hover:bg-amber-500/20'
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200 hover:bg-amber-100'
                                 }`}
                               >
-                                <Eye className="w-3.5 h-3.5 text-amber-400" />
+                                <Eye className="w-3.5 h-3.5 text-amber-600" />
                                 <span>{isExampleOpen ? 'Hide Example' : 'View Example'}</span>
                               </button>
                             )}
@@ -1641,7 +1634,7 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                     <button
                       type="button"
                       onClick={() => setViewMode('showme')}
-                      className="px-4 py-2 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-2 cursor-pointer transition"
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-2 cursor-pointer transition shadow-xs"
                     >
                       <Play className="w-3.5 h-3.5" />
                       Show Me Animated Walkthrough
@@ -1652,15 +1645,15 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                 <ModuleCpdQuiz module={activeTrainingModule} />
 
                 {/* 5. MODAL FOOTER */}
-                <div className="pt-4 border-t border-slate-800 flex flex-wrap items-center justify-between gap-4">
-                  <div className="text-xs text-slate-400 font-mono">
+                <div className="pt-4 border-t border-gray-200 flex flex-wrap items-center justify-between gap-4">
+                  <div className="text-xs text-gray-500 font-mono">
                     Intelligent Scheduler V8.02 Live • Multi-Bay FCS Dispatch &amp; Workshop ERP Suite
                   </div>
                   <button
                     onClick={onClose}
-                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-indigo-600/30 cursor-pointer font-mono"
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow-sm cursor-pointer"
                   >
-                    Close Visual Guide
+                    Close Guide
                   </button>
                 </div>
               </div>
@@ -1671,10 +1664,10 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
           {viewMode === 'sop' && (
             <>
               {/* SIDEBAR FOR SOP TITLES */}
-              <div className="w-full md:w-84 bg-slate-950/70 border-b md:border-b-0 md:border-r border-slate-800 p-4 overflow-y-auto space-y-2 shrink-0">
-                <div className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
+              <div className="w-full md:w-84 bg-gray-50 border-b md:border-b-0 md:border-r border-gray-200 p-4 overflow-y-auto space-y-2 shrink-0">
+                <div className="text-[10px] font-mono font-bold text-gray-500 uppercase tracking-wider px-2 mb-2 flex items-center justify-between">
                   <span>Standard Operating Procedures ({filteredSops.length})</span>
-                  <span className="text-indigo-400">DOCS</span>
+                  <span className="text-indigo-600">DOCS</span>
                 </div>
 
                 {filteredSops.map((sop, index) => {
@@ -1683,15 +1676,15 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                     <button
                       key={index}
                       onClick={() => setSelectedSop(sop)}
-                      className={`w-full text-left p-3.5 rounded-2xl border transition-all flex items-start gap-3 cursor-pointer ${
+                      className={`w-full text-left p-3 rounded-xl border transition-all flex items-start gap-3 cursor-pointer ${
                         isSelected
-                          ? 'bg-gradient-to-r from-indigo-900/60 to-slate-900 border-indigo-500 shadow-lg text-white'
-                          : 'bg-slate-900/40 border-slate-800/80 hover:bg-slate-850 hover:border-slate-700 text-slate-300'
+                          ? 'bg-indigo-50 border-indigo-400 shadow-xs text-gray-900'
+                          : 'bg-white border-gray-200 hover:bg-gray-100/70 hover:border-gray-300 text-gray-700'
                       }`}
                     >
                       <div
                         className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                          isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-800 text-slate-400'
+                          isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-500'
                         }`}
                       >
                         <FileText className="w-4 h-4" />
@@ -1700,7 +1693,7 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
                         <span className="text-xs font-bold capitalize block leading-snug">
                           {sop.title}
                         </span>
-                        <span className="text-[10px] font-mono text-slate-400 block mt-1">
+                        <span className="text-[10px] font-mono text-gray-500 block mt-1">
                           {sop.file}
                         </span>
                       </div>
@@ -1710,24 +1703,24 @@ export default function HelpCentre({ open, onClose }: HelpCentreProps) {
               </div>
 
               {/* MAIN CONTENT AREA FOR SELECTED SOP */}
-              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 bg-slate-900/90 text-slate-200">
+              <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 bg-gray-50/70 text-gray-800">
                 {selectedSop ? (
                   <div className="space-y-6 max-w-4xl">
-                    <div className="bg-slate-950 border border-slate-800 rounded-2xl p-5 flex items-center justify-between gap-4">
+                    <div className="bg-white border border-gray-200 rounded-2xl p-5 flex items-center justify-between gap-4 shadow-2xs">
                       <div>
-                        <span className="text-[10px] font-mono bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-bold uppercase">
+                        <span className="text-[10px] font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded font-bold uppercase">
                           Standard Operating Procedure
                         </span>
-                        <h2 className="text-xl font-bold text-white mt-1 capitalize">
+                        <h2 className="text-xl font-bold text-gray-900 mt-1 capitalize">
                           {selectedSop.title}
                         </h2>
                       </div>
-                      <span className="text-xs font-mono text-slate-400">
+                      <span className="text-xs font-mono text-gray-500">
                         File: {selectedSop.file}
                       </span>
                     </div>
 
-                    <div className="bg-slate-950/60 border border-slate-800/80 rounded-3xl p-6 md:p-8 text-slate-300 leading-relaxed space-y-4">
+                    <div className="bg-white border border-gray-200 rounded-2xl p-6 md:p-8 text-gray-700 leading-relaxed space-y-4 shadow-2xs">
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{

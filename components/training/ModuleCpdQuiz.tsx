@@ -83,37 +83,37 @@ export const ModuleCpdQuiz: React.FC<ModuleCpdQuizProps> = ({ module }) => {
     };
 
     return (
-        <div className="bg-slate-900/90 border border-slate-700/80 rounded-2xl p-5 space-y-4">
+        <div className="bg-white border border-gray-200 rounded-2xl p-5 space-y-4 shadow-sm">
             {/* Header & Current CPD Status */}
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-3">
                 <div className="flex items-center gap-2.5">
-                    <div className="w-9 h-9 rounded-xl bg-indigo-500/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300">
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600">
                         <Award className="w-5 h-5" />
                     </div>
                     <div>
-                        <h3 className="text-sm font-black text-white">
+                        <h3 className="text-sm font-black text-gray-900">
                             CPD Knowledge Check — {module.title}
                         </h3>
-                        <p className="text-[11px] text-slate-400">
+                        <p className="text-[11px] text-gray-500">
                             Module v{module.version} • {module.cpdMinutes} CPD mins • Pass mark {module.passThreshold}%
                         </p>
                     </div>
                 </div>
 
                 {status === 'current' && record && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-bold">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Certified v{record.completedVersion} ({record.score}%)
                     </span>
                 )}
                 {status === 'refresher_due' && record && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold">
                         <AlertTriangle className="w-3.5 h-3.5" />
                         Refresher Due (Completed v{record.completedVersion}, Latest v{module.version})
                     </span>
                 )}
                 {status === 'not_started' && (
-                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 text-xs font-bold">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 border border-gray-200 text-gray-600 text-xs font-bold">
                         <HelpCircle className="w-3.5 h-3.5" />
                         Not Yet Certified
                     </span>
@@ -128,22 +128,22 @@ export const ModuleCpdQuiz: React.FC<ModuleCpdQuizProps> = ({ module }) => {
                     const isCorrect = chosen === q.correctIndex;
 
                     return (
-                        <div key={q.id} className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 space-y-2">
-                            <div className="text-xs font-bold text-slate-100">
+                        <div key={q.id} className="p-3.5 rounded-xl bg-gray-50 border border-gray-200 space-y-2">
+                            <div className="text-xs font-bold text-gray-900">
                                 {qIdx + 1}. {q.question}
                             </div>
                             <div className="space-y-1.5">
                                 {q.options.map((opt, optIdx) => {
                                     const selected = chosen === optIdx;
-                                    let optStyle = 'bg-slate-900 border-slate-800 text-slate-300 hover:border-indigo-500/50';
+                                    let optStyle = 'bg-white border-gray-200 text-gray-700 hover:border-indigo-300';
                                     if (showFeedback) {
                                         if (optIdx === q.correctIndex) {
-                                            optStyle = 'bg-emerald-950/60 border-emerald-500/60 text-emerald-200';
+                                            optStyle = 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold';
                                         } else if (selected && optIdx !== q.correctIndex) {
-                                            optStyle = 'bg-rose-950/60 border-rose-500/60 text-rose-200';
+                                            optStyle = 'bg-rose-50 border-rose-300 text-rose-900';
                                         }
                                     } else if (selected) {
-                                        optStyle = 'bg-indigo-950/70 border-indigo-500 text-white';
+                                        optStyle = 'bg-indigo-50 border-indigo-400 text-indigo-950 font-semibold';
                                     }
 
                                     return (
@@ -164,7 +164,7 @@ export const ModuleCpdQuiz: React.FC<ModuleCpdQuizProps> = ({ module }) => {
                                 })}
                             </div>
                             {showFeedback && (
-                                <div className={`text-[11px] px-2.5 py-1.5 rounded-lg ${isCorrect ? 'text-emerald-300 bg-emerald-950/40' : 'text-amber-300 bg-amber-950/40'}`}>
+                                <div className={`text-[11px] px-2.5 py-1.5 rounded-lg ${isCorrect ? 'text-emerald-800 bg-emerald-100/70' : 'text-amber-900 bg-amber-100/70'}`}>
                                     {q.explanation}
                                 </div>
                             )}
@@ -172,7 +172,7 @@ export const ModuleCpdQuiz: React.FC<ModuleCpdQuizProps> = ({ module }) => {
                     );
                 })}
 
-                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30 text-xs text-slate-200 cursor-pointer">
+                <label className="flex items-start gap-2.5 p-3 rounded-xl bg-indigo-50/70 border border-indigo-200 text-xs text-gray-800 cursor-pointer">
                     <input
                         type="checkbox"
                         checked={acknowledged}
@@ -186,18 +186,18 @@ export const ModuleCpdQuiz: React.FC<ModuleCpdQuizProps> = ({ module }) => {
 
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     {submittedResult ? (
-                        <div className={`text-xs font-bold ${submittedResult.passed ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        <div className={`text-xs font-bold ${submittedResult.passed ? 'text-emerald-700' : 'text-amber-700'}`}>
                             Result: {submittedResult.score}% ({submittedResult.correctCount}/{module.quiz.length}) — {submittedResult.passed ? 'Passed & Logged' : 'Please review and retry'}
                         </div>
                     ) : (
-                        <div className="text-[11px] text-slate-400">
+                        <div className="text-[11px] text-gray-500">
                             Answer all {module.quiz.length} questions and tick the confirmation box to log CPD.
                         </div>
                     )}
                     <button
                         type="submit"
                         disabled={!allAnswered || !acknowledged || isSaving}
-                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+                        className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 disabled:opacity-40 cursor-pointer shadow-xs"
                     >
                         <Send className="w-3.5 h-3.5" />
                         {isSaving ? 'Saving CPD...' : status === 'current' ? 'Re-Verify CPD' : 'Submit CPD Check'}

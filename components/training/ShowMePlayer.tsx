@@ -10,18 +10,18 @@ interface ShowMePlayerProps {
 const getToneClasses = (tone: ShowMeMockElement['tone'], isTarget: boolean) => {
     const base =
         tone === 'indigo'
-            ? 'bg-indigo-950/80 border-indigo-500/60 text-indigo-100'
+            ? 'bg-indigo-50 border-indigo-200 text-indigo-950'
             : tone === 'emerald'
-                ? 'bg-emerald-950/80 border-emerald-500/60 text-emerald-100'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
                 : tone === 'amber'
-                    ? 'bg-amber-950/80 border-amber-500/60 text-amber-100'
+                    ? 'bg-amber-50 border-amber-200 text-amber-950'
                     : tone === 'rose'
-                        ? 'bg-rose-950/80 border-rose-500/60 text-rose-100'
-                        : 'bg-slate-900 border-slate-700 text-slate-200';
+                        ? 'bg-rose-50 border-rose-200 text-rose-950'
+                        : 'bg-white border-gray-200 text-gray-800';
 
     const ring = isTarget
-        ? 'ring-2 ring-amber-400 shadow-lg shadow-amber-500/20 scale-[1.03]'
-        : 'opacity-85';
+        ? 'ring-2 ring-indigo-600 shadow-md scale-[1.03]'
+        : 'opacity-90';
 
     return `${base} ${ring}`;
 };
@@ -64,15 +64,15 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
     const currentStep = steps[Math.min(stepIndex, steps.length - 1)];
 
     return (
-        <div className="bg-slate-900/90 border border-indigo-500/40 rounded-2xl overflow-hidden shadow-xl">
+        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
             {/* Player Header */}
-            <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2">
+            <div className="px-4 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-bold uppercase tracking-wider">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-50 border border-indigo-200 text-indigo-700 text-[10px] font-bold uppercase tracking-wider">
                         <Sparkles className="w-3 h-3" />
                         Show Me Replay
                     </span>
-                    <span className="text-xs font-bold text-white">
+                    <span className="text-xs font-bold text-gray-900">
                         {module.title}
                     </span>
                 </div>
@@ -80,7 +80,7 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                     <button
                         type="button"
                         onClick={() => setSpeedMs(prev => (prev === 3200 ? 2000 : 3200))}
-                        className="px-2 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-[11px] font-mono text-slate-300 cursor-pointer"
+                        className="px-2 py-1 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-[11px] font-mono text-gray-700 cursor-pointer"
                         title="Toggle playback speed"
                     >
                         {speedMs === 3200 ? '1.0x' : '1.5x'}
@@ -92,7 +92,7 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                             setIsPlaying(false);
                         }}
                         disabled={stepIndex === 0}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 cursor-pointer"
+                        className="p-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 disabled:opacity-40 cursor-pointer"
                         title="Previous step"
                     >
                         <ChevronLeft className="w-4 h-4" />
@@ -105,7 +105,7 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                             }
                             setIsPlaying(p => !p);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 cursor-pointer shadow-xs"
                     >
                         {isPlaying ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5" />}
                         {isPlaying ? 'Pause' : stepIndex >= steps.length - 1 ? 'Replay' : 'Play'}
@@ -117,7 +117,7 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                             setIsPlaying(false);
                         }}
                         disabled={stepIndex >= steps.length - 1}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 cursor-pointer"
+                        className="p-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 disabled:opacity-40 cursor-pointer"
                         title="Next step"
                     >
                         <ChevronRight className="w-4 h-4" />
@@ -128,7 +128,7 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                             setStepIndex(0);
                             setIsPlaying(true);
                         }}
-                        className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 cursor-pointer"
+                        className="p-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 cursor-pointer"
                         title="Restart animation"
                     >
                         <RotateCcw className="w-3.5 h-3.5" />
@@ -137,18 +137,18 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
             </div>
 
             {/* Simulated Screen Stage */}
-            <div className="relative p-5 bg-gradient-to-br from-slate-950 via-slate-900 to-indigo-950/60 min-h-[230px] flex flex-col justify-between overflow-hidden">
+            <div className="relative p-5 bg-slate-100/80 min-h-[230px] flex flex-col justify-between overflow-hidden">
                 {/* Mock App Window Bar */}
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-4">
+                <div className="flex items-center justify-between border-b border-gray-200 pb-2.5 mb-4">
                     <div className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
-                        <span className="ml-2 text-xs font-mono font-bold text-slate-300">
+                        <span className="w-2.5 h-2.5 rounded-full bg-rose-400" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
+                        <span className="ml-2 text-xs font-bold text-gray-800">
                             {currentStep.screenTitle}
                         </span>
                     </div>
-                    <span className="text-[11px] font-mono text-indigo-300 bg-indigo-500/10 border border-indigo-500/30 px-2 py-0.5 rounded">
+                    <span className="text-[11px] font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded font-semibold">
                         Step {stepIndex + 1} / {steps.length} • {currentStep.actionType.toUpperCase()}
                     </span>
                 </div>
@@ -162,15 +162,15 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                                 key={el.id}
                                 className={`p-3.5 rounded-xl border transition-all duration-500 ${getToneClasses(el.tone, isTarget)}`}
                             >
-                                <div className="text-[10px] uppercase tracking-wider font-mono opacity-75 mb-1">
+                                <div className="text-[10px] uppercase tracking-wider font-semibold opacity-70 mb-1">
                                     {el.label}
                                 </div>
                                 <div className="text-xs font-bold leading-snug">
                                     {el.value}
                                 </div>
                                 {isTarget && (
-                                    <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-mono text-amber-300">
-                                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping" />
+                                    <div className="mt-2 inline-flex items-center gap-1 text-[10px] font-bold text-indigo-700">
+                                        <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping" />
                                         {currentStep.targetLabel}
                                     </div>
                                 )}
@@ -181,8 +181,8 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
 
                 {/* Toast Preview */}
                 {currentStep.toastText && (
-                    <div className="mt-3 self-end inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-200 text-[11px] font-semibold animate-in fade-in duration-300">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                    <div className="mt-3 self-end inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold shadow-sm animate-in fade-in duration-300">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-100" />
                         {currentStep.toastText}
                     </div>
                 )}
@@ -198,20 +198,20 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                 >
                     <div className="relative">
                         {pulseActive && (
-                            <span className="absolute -inset-2 rounded-full bg-amber-400/40 animate-ping" />
+                            <span className="absolute -inset-2 rounded-full bg-indigo-500/35 animate-ping" />
                         )}
-                        <div className="w-7 h-7 rounded-full bg-amber-400/20 border border-amber-300 flex items-center justify-center shadow-lg">
-                            <MousePointer2 className="w-4 h-4 text-amber-300 fill-amber-300" />
+                        <div className="w-7 h-7 rounded-full bg-white/95 border-2 border-indigo-600 flex items-center justify-center shadow-lg">
+                            <MousePointer2 className="w-4 h-4 text-indigo-600 fill-indigo-600" />
                         </div>
                     </div>
                 </div>
             </div>
 
             {/* Step Caption & Timeline */}
-            <div className="p-4 bg-slate-950/90 border-t border-slate-800 space-y-3">
+            <div className="p-4 bg-white border-t border-gray-200 space-y-3">
                 <div>
-                    <div className="text-xs font-bold text-white">{currentStep.title}</div>
-                    <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">{currentStep.caption}</p>
+                    <div className="text-xs font-bold text-gray-900">{currentStep.title}</div>
+                    <p className="text-xs text-gray-600 mt-0.5 leading-relaxed">{currentStep.caption}</p>
                 </div>
                 <div className="flex gap-1.5">
                     {steps.map((s, idx) => (
@@ -224,10 +224,10 @@ export const ShowMePlayer: React.FC<ShowMePlayerProps> = ({ module, onComplete }
                             }}
                             className={`h-1.5 flex-1 rounded-full transition-all cursor-pointer ${
                                 idx === stepIndex
-                                    ? 'bg-amber-400'
+                                    ? 'bg-indigo-600'
                                     : idx < stepIndex
-                                        ? 'bg-indigo-500'
-                                        : 'bg-slate-800 hover:bg-slate-700'
+                                        ? 'bg-indigo-300'
+                                        : 'bg-gray-200 hover:bg-gray-300'
                             }`}
                             title={s.title}
                         />
