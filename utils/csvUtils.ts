@@ -11,7 +11,7 @@ export const headerMapping: { [key: string]: string } = {
     'address line 2': 'addressLine2', 'address_line_2': 'addressLine2', 'address2': 'addressLine2', 'address 2': 'addressLine2',
     'city': 'city', 'town': 'city', 'county': 'county',
     'post code': 'postcode', 'post_code': 'postcode', 'postcode': 'postcode', 'zip': 'postcode', 'zipcode': 'postcode',
-    
+
     // Vehicles
     'registration number': 'registration', 'reg': 'registration', 'plate': 'registration', 'vrm': 'registration',
     'vehicle make': 'make', 'make': 'make',
@@ -38,18 +38,18 @@ export const headerMapping: { [key: string]: string } = {
     'stock': 'stockQuantity', 'quantity': 'stockQuantity', 'stock quantity': 'stockQuantity', 'stock_quantity': 'stockQuantity',
     'supplier': 'defaultSupplierId', 'supplier id': 'defaultSupplierId',
     'tax code': 'taxCodeId',
-    
+
     // Vehicle Linking Fields (for matching to customers)
     'customer id': 'customerId', 'customer_id': 'customerId', 'customerid': 'customerId',
     'owner id': 'customerId', 'owner_id': 'customerId', 'ownerid': 'customerId',
     'client id': 'customerId', 'client_id': 'customerId', 'clientid': 'customerId',
     'account number': 'customerId', 'account_number': 'customerId',
-    
+
     'owner email': 'customerEmail', 'customer email': 'customerEmail',
     'owner phone': 'customerPhone', 'customer phone': 'customerPhone',
     'owner name': 'customerName', 'customer name': 'customerName',
     'owner': 'customerName', 'customer': 'customerName', 'client': 'customerName',
-    
+
     // Jobs
     'job id': 'id', 'job_id': 'id', 'jobid': 'id', 'job no': 'id', 'job no.': 'id', 'job number': 'id', 'job_number': 'id',
     'job description': 'description', 'work required': 'description', 'work': 'description', 'details': 'description',
@@ -71,7 +71,7 @@ export const headerMapping: { [key: string]: string } = {
 export const parseCsv = (file: File): Promise<any[]> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        
+
         reader.onload = (e) => {
             let text = e.target?.result as string;
             if (!text) {
@@ -88,7 +88,7 @@ export const parseCsv = (file: File): Promise<any[]> => {
             let currentRow: string[] = [];
             let currentValue = '';
             let inQuotes = false;
-            
+
             // Robust character-by-character parsing to handle quotes and newlines correctly
             for (let i = 0; i < text.length; i++) {
                 const char = text[i];
@@ -130,7 +130,7 @@ export const parseCsv = (file: File): Promise<any[]> => {
                     }
                 }
             }
-            
+
             // Push the last value/row if exists
             if (currentValue || currentRow.length > 0) {
                 currentRow.push(currentValue.trim());
@@ -146,9 +146,9 @@ export const parseCsv = (file: File): Promise<any[]> => {
 
             // Process headers: Clean quotes and trim, lowercase for mapping
             const headers = rows[0].map(h => h.toLowerCase().replace(/^"|"$/g, '').trim());
-            
+
             const data = [];
-            
+
             for (let i = 1; i < rows.length; i++) {
                 const rowValues = rows[i];
                 // Skip empty rows
@@ -157,23 +157,23 @@ export const parseCsv = (file: File): Promise<any[]> => {
                 const row: any = {};
                 headers.forEach((header, index) => {
                     let value: string | number | boolean = rowValues[index] || '';
-                    
+
                     // Remove surrounding quotes if parsing didn't catch them (redundancy check)
                     if (typeof value === 'string') {
                         value = value.replace(/^"|"$/g, '').trim();
                     }
 
                     const mappedHeader = headerMapping[header] || header;
-                    
+
                     // Simple type conversion
                     if (value === 'true') value = true;
                     else if (value === 'false') value = false;
                     // Keep specific fields as strings even if they look like numbers, but preserve IDs/Phones
                     // Added customerId to preserved string fields
                     else if (value !== '' && !isNaN(Number(value)) && !['phone', 'mobile', 'postcode', 'zip', 'vin', 'registration', 'id', 'jobid', 'customerid', 'partNumber'].some(k => mappedHeader.toLowerCase().includes(k))) {
-                         value = Number(value);
+                        value = Number(value);
                     }
-                    
+
                     row[mappedHeader] = value;
                 });
 
@@ -183,7 +183,7 @@ export const parseCsv = (file: File): Promise<any[]> => {
             }
             resolve(data);
         };
-        
+
         reader.onerror = () => reject(new Error('Failed to read file'));
         reader.readAsText(file);
     });
@@ -195,7 +195,7 @@ export const validateCsvData = (
     rows: any[],
     entityType: CsvImportEntityType,
     fileName?: string
-): { valid: true } | { valid: false; error: string } => {
+): { valid: boolean; error: string } => {
     if (fileName && !fileName.toLowerCase().endsWith('.csv')) {
         return { valid: false, error: `Invalid file format "${fileName}". Please upload a valid .csv file.` };
     }
@@ -261,5 +261,5 @@ export const validateCsvData = (
         }
     }
 
-    return { valid: true };
+    return { valid: true, error: '' };
 };
