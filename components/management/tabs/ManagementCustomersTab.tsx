@@ -174,13 +174,22 @@ export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ 
 
             for (let i = 0; i < data.length; i++) {
                 const row = data[i];
-                const id = row.id || generateCustomerId(row.surname || 'New', [...customers, ...importedCustomers]);
+                let forename = String(row.forename || '').trim();
+                let surname = String(row.surname || '').trim();
+                const fallbackName = String(row.customerName || row.name || '').trim();
+                if (!forename && !surname && fallbackName) {
+                    const parts = fallbackName.split(/\s+/);
+                    forename = parts[0] || '';
+                    surname = parts.slice(1).join(' ') || parts[0] || '';
+                }
+
+                const id = row.id || generateCustomerId(surname || row.companyName || 'New', [...customers, ...importedCustomers]);
 
                 const baseCustomer: Customer = {
                     ...row,
                     id,
-                    forename: row.forename || 'Unknown',
-                    surname: row.surname || 'Unknown',
+                    forename: forename || 'Unknown',
+                    surname: surname || 'Unknown',
                     createdDate: row.createdDate || new Date().toISOString(),
                     marketingConsent: row.marketingConsent === 'true' || row.marketingConsent === true,
                     serviceReminderConsent: row.serviceReminderConsent !== 'false' && row.serviceReminderConsent !== false

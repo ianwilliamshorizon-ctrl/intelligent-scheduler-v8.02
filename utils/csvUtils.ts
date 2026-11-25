@@ -1,14 +1,16 @@
 
 export const headerMapping: { [key: string]: string } = {
     // Customers
-    'first name': 'forename', 'first_name': 'forename', 'firstname': 'forename',
-    'last name': 'surname', 'last_name': 'surname', 'lastname': 'surname',
-    'email address': 'email', 'email_address': 'email',
-    'phone number': 'phone', 'phone_number': 'phone', 'phonenumber': 'phone',
-    'mobile number': 'mobile', 'mobile_number': 'mobile',
-    'address line 1': 'addressLine1', 'address_line_1': 'addressLine1',
-    'address line 2': 'addressLine2', 'address_line_2': 'addressLine2',
-    'post code': 'postcode', 'post_code': 'postcode', 'zip': 'postcode', 'zipcode': 'postcode',
+    'first name': 'forename', 'first_name': 'forename', 'firstname': 'forename', 'forename': 'forename', 'given name': 'forename',
+    'last name': 'surname', 'last_name': 'surname', 'lastname': 'surname', 'surname': 'surname', 'family name': 'surname',
+    'company': 'companyName', 'company name': 'companyName', 'company_name': 'companyName', 'companyname': 'companyName', 'business name': 'companyName',
+    'email address': 'email', 'email_address': 'email', 'e-mail': 'email', 'email': 'email',
+    'phone number': 'phone', 'phone_number': 'phone', 'phonenumber': 'phone', 'telephone': 'phone', 'tel': 'phone', 'phone': 'phone',
+    'mobile number': 'mobile', 'mobile_number': 'mobile', 'mobile phone': 'mobile', 'cell': 'mobile', 'mobile': 'mobile',
+    'address line 1': 'addressLine1', 'address_line_1': 'addressLine1', 'address1': 'addressLine1', 'address 1': 'addressLine1',
+    'address line 2': 'addressLine2', 'address_line_2': 'addressLine2', 'address2': 'addressLine2', 'address 2': 'addressLine2',
+    'city': 'city', 'town': 'city', 'county': 'county',
+    'post code': 'postcode', 'post_code': 'postcode', 'postcode': 'postcode', 'zip': 'postcode', 'zipcode': 'postcode',
     
     // Vehicles
     'registration number': 'registration', 'reg': 'registration', 'plate': 'registration', 'vrm': 'registration',

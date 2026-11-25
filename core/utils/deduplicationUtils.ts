@@ -358,22 +358,15 @@ export const isDuplicateCustomer = (c1: Partial<Customer>, c2: Partial<Customer>
     const pc2 = String(c2.postcode || '').toUpperCase().replace(/\s/g, '');
     const sur1 = normalizeName(c1.surname || c1.companyName || '');
     const sur2 = normalizeName(c2.surname || c2.companyName || '');
-    if (pc1.length >= 4 && pc2.length >= 4 && pc1 === pc2 && sur1.length >= 3 && sur1 === sur2) {
+    if (
+        pc1.length >= 4 &&
+        pc2.length >= 4 &&
+        pc1 === pc2 &&
+        sur1.length >= 3 &&
+        sur1 !== 'unknown' &&
+        sur1 === sur2
+    ) {
         return true;
-    }
-
-    // Full name / company match only when there are no conflicting contact details
-    const hasConflict =
-        (e1 && e2 && e1 !== e2) ||
-        (pc1.length >= 4 && pc2.length >= 4 && pc1 !== pc2);
-    if (!hasConflict) {
-        const full1 = normalizeName(`${c1.forename || ''}${c1.surname || ''}`);
-        const full2 = normalizeName(`${c2.forename || ''}${c2.surname || ''}`);
-        if (full1.length >= 4 && full1 === full2) return true;
-
-        const comp1 = normalizeName(c1.companyName || '');
-        const comp2 = normalizeName(c2.companyName || '');
-        if (comp1.length >= 4 && comp1 === comp2) return true;
     }
 
     return false;
