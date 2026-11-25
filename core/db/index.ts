@@ -10,7 +10,8 @@ import {
     onSnapshot, 
     runTransaction,
     query, 
-    WithFieldValue
+    WithFieldValue,
+    writeBatch
 } from 'firebase/firestore';
 
 // We import the single source of truth for 'auth' and 'db' 
@@ -181,9 +182,56 @@ export const generateSequenceId = async (prefix: string, entityShortCode: string
 };
 
 /**
+ * RESTORE A FULL COLLECTION (IndexedDB + Firestore batch replace)
+ */
+export const restoreCollectionData = async (collectionKey: string, records: any[]): Promise<void> => {
+    const safeRecords = Array.isArray(records) ? records.filter(r => r && r.id) : [];
+    try {
+        await idbSet(collectionKey, safeRecords);
+    } catch (e) {
+        console.warn(`[Restore] IndexedDB update warning for ${collectionKey}:`, e);
+    }
+
+    if (!db) return;
+
+    const colRef = collection(db, collectionKey);
+    const incomingIds = new Set(safeRecords.map(r => String(r.id)));
+    const existingSnap = await getDocs(colRef);
+
+    const ops: Array<{ type: 'set' | 'delete'; id: string; data?: any }> = [];
+    existingSnap.forEach(docSnap => {
+        if (!incomingIds.has(docSnap.id)) {
+            ops.push({ type: 'delete', id: docSnap.id });
+        }
+    });
+    for (const rec of safeRecords) {
+        ops.push({ type: 'set', id: String(rec.id), data: cleanDataForFirestore(rec) });
+    }
+
+    const batchLimit = 400;
+    for (let i = 0; i < ops.length; i += batchLimit) {
+        const batch = writeBatch(db);
+        const chunk = ops.slice(i, i + batchLimit);
+        for (const op of chunk) {
+            const refDoc = doc(colRef, op.id);
+            if (op.type === 'delete') {
+                batch.delete(refDoc);
+            } else {
+                batch.set(refDoc, op.data);
+            }
+        }
+        await batch.commit();
+    }
+};
+
+/**
  * SIMPLE KEY/VALUE STORAGE (SETTINGS)
  */
 export const setItem = async (key: string, value: any) => {
+    if (key.startsWith('brooks_') && Array.isArray(value)) {
+        await restoreCollectionData(key, value);
+        return;
+    }
     if (!db) return;
     const docRef = doc(db, COLLECTIONS.SETTINGS, key);
     const cleanValue = cleanDataForFirestore(value);

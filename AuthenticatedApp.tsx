@@ -6,7 +6,7 @@ import * as T from './types';
 import { useData } from './core/state/DataContext';
 import { useApp } from './core/state/AppContext';
 import { createBackup, downloadBackup } from './core/utils/backupUtils';
-import { setItem, uploadToStorage, downloadFromStorage, getDocument } from './core/db';
+import { setItem, getItem, uploadToStorage, downloadFromStorage, getDocument } from './core/db';
 import { idbSet, idbGet } from './core/db/idb';
 import { getCustomerDisplayName } from './core/utils/customerUtils';
 import { formatDate, dateStringToDate } from './core/utils/dateUtils';
@@ -250,8 +250,8 @@ const AuthenticatedApp = () => {
             // Restore from Cloud Storage
             snapshot = await downloadFromStorage(snapshotId);
         } else {
-            // Restore from Local IndexedDB
-            snapshot = await idbGet(snapshotId);
+            // Restore from Local IndexedDB, or fallback to legacy Firestore settings
+            snapshot = (await idbGet(snapshotId)) || (await getItem(snapshotId));
         }
 
         if (!snapshot) throw new Error("Snapshot not found or could not be downloaded");

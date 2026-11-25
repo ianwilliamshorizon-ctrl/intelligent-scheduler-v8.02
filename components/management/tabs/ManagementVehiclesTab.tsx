@@ -257,13 +257,21 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
             const importedVehicles: Vehicle[] = [];
             let count = 0;
             let duplicateCount = 0;
+            let invalidCount = 0;
             let batchCount = 0;
             const batchLimit = 400;
             let currentBatch = writeBatch(db);
 
             for (const row of data) {
-                const id = row.id || crypto.randomUUID();
-                let resolvedCustomerId = row.customerId || '';
+                const normalizedReg = normalizeVRM(row.registration);
+                const normalizedVin = String(row.vin || '').trim().toUpperCase();
+                if (!normalizedReg && normalizedVin.length < 6) {
+                    invalidCount++;
+                    continue;
+                }
+
+                const id = String(row.id || crypto.randomUUID()).trim();
+                let resolvedCustomerId = String(row.customerId || '').trim();
                 if (!resolvedCustomerId) {
                     const rowEmail = normalizeEmail(row.customerEmail);
                     const rowPhone = normalizePhone(row.customerPhone);
@@ -277,13 +285,20 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                 }
 
                 const vehicleData: Vehicle = {
-                    ...row,
                     id,
-                    registration: normalizeVRM(row.registration),
-                    make: String(row.make || 'Unknown'),
-                    model: String(row.model || 'Unknown'),
-                    colour: row.colour || row.Color || row.Colour || row.color || 'Silver',
+                    registration: normalizedReg,
+                    make: String(row.make || 'Unknown').trim(),
+                    model: String(row.model || 'Unknown').trim(),
+                    colour: String(row.colour || row.Color || row.Colour || row.color || 'Silver').trim(),
                     customerId: resolvedCustomerId,
+                    ...(normalizedVin ? { vin: normalizedVin } : {}),
+                    ...(row.engineNumber ? { engineNumber: String(row.engineNumber).trim() } : {}),
+                    ...(row.fuelType ? { fuelType: String(row.fuelType).trim() } : {}),
+                    ...(row.transmissionType ? { transmissionType: String(row.transmissionType).trim() as any } : {}),
+                    ...(row.cc && !isNaN(Number(row.cc)) ? { cc: Number(row.cc) } : {}),
+                    ...(row.nextMotDate ? { nextMotDate: String(row.nextMotDate).trim() } : {}),
+                    ...(row.nextServiceDate ? { nextServiceDate: String(row.nextServiceDate).trim() } : {}),
+                    ...(row.manufactureDate ? { manufactureDate: String(row.manufactureDate).trim() } : {}),
                 };
 
                 const isDupInDb = vehicles.some(existing => isDuplicateVehicle(existing, vehicleData));
@@ -306,16 +321,17 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                 }
             }
             if (batchCount > 0) await currentBatch.commit();
+            const skippedParts: string[] = [];
+            if (duplicateCount > 0) skippedParts.push(`${duplicateCount} duplicate(s) skipped`);
+            if (invalidCount > 0) skippedParts.push(`${invalidCount} invalid/empty row(s) skipped`);
+            const suffix = skippedParts.length > 0 ? ` (${skippedParts.join(', ')})` : '';
             if (count > 0) {
                 await forceRefresh('brooks_vehicles');
-                onShowStatus(
-                    `Imported ${count} vehicle(s).${duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) skipped)` : ''}`,
-                    'success'
-                );
+                onShowStatus(`Imported ${count} vehicle(s).${suffix}`, 'success');
             } else {
                 onShowStatus(
-                    duplicateCount > 0
-                        ? `No new vehicles imported. ${duplicateCount} duplicate(s) skipped.`
+                    skippedParts.length > 0
+                        ? `No new vehicles imported.${suffix}`
                         : 'No new vehicles found.',
                     'info'
                 );
@@ -334,6 +350,29 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
         setIsModalOpen(false);
     };
 
+    const corruptVehicles = useMemo(() => {
+        return vehicles.filter(v => !v?.id || (!normalizeVRM(v.registration) && !v.vin));
+    }, [vehicles]);
+
+    const handleCleanCorruptVehicles = async () => {
+        if (corruptVehicles.length === 0) return;
+        if (!confirm(`Remove ${corruptVehicles.length} corrupt vehicle record(s) with no registration or VIN?`)) return;
+        try {
+            const batch = writeBatch(db);
+            for (const v of corruptVehicles) {
+                if (v?.id) {
+                    batch.delete(doc(collection(db, 'brooks_vehicles'), v.id));
+                }
+            }
+            await batch.commit();
+            await forceRefresh('brooks_vehicles');
+            onShowStatus(`Removed ${corruptVehicles.length} corrupt vehicle record(s).`, 'success');
+        } catch (err) {
+            console.error('Failed to clean corrupt vehicles:', err);
+            onShowStatus('Failed to remove corrupt vehicle records.', 'error');
+        }
+    };
+
     return (
         <div className="space-y-4 h-full flex flex-col">
             {/* Toolbar */}
@@ -342,6 +381,16 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
                     {selectedIds.size > 0 && (
                         <button onClick={bulkDelete} className="bg-red-100 text-red-700 px-4 py-2 rounded-lg hover:bg-red-200 flex items-center gap-2 text-sm font-bold border border-red-200 shadow-sm animate-in slide-in-from-left-2">
                             <Trash2 size={16}/> Delete ({selectedIds.size})
+                        </button>
+                    )}
+                    {corruptVehicles.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={handleCleanCorruptVehicles}
+                            className="bg-amber-100 text-amber-900 px-3 py-2 rounded-lg hover:bg-amber-200 flex items-center gap-1.5 text-xs font-bold border border-amber-300 cursor-pointer"
+                            title="Delete vehicle records missing registration and VIN"
+                        >
+                            <Trash2 size={14} /> Clean Corrupt ({corruptVehicles.length})
                         </button>
                     )}
                     <div className="text-sm text-gray-400 italic">
