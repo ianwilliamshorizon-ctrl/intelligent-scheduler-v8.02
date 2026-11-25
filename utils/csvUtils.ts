@@ -188,3 +188,78 @@ export const parseCsv = (file: File): Promise<any[]> => {
         reader.readAsText(file);
     });
 };
+
+export type CsvImportEntityType = 'customers' | 'vehicles' | 'jobs' | 'invoices' | 'parts';
+
+export const validateCsvData = (
+    rows: any[],
+    entityType: CsvImportEntityType,
+    fileName?: string
+): { valid: true } | { valid: false; error: string } => {
+    if (fileName && !fileName.toLowerCase().endsWith('.csv')) {
+        return { valid: false, error: `Invalid file format "${fileName}". Please upload a valid .csv file.` };
+    }
+    if (!Array.isArray(rows) || rows.length === 0) {
+        return { valid: false, error: 'CSV import rejected: file is empty or contains no data rows.' };
+    }
+
+    const keys = new Set<string>();
+    for (const row of rows.slice(0, 10)) {
+        if (row && typeof row === 'object') {
+            Object.keys(row).forEach(k => keys.add(k));
+        }
+    }
+
+    if (keys.size < 2) {
+        return {
+            valid: false,
+            error: 'CSV import rejected: file does not appear to be comma-separated (check delimiter/columns).'
+        };
+    }
+
+    const hasAny = (candidates: string[]) => candidates.some(c => keys.has(c));
+
+    if (entityType === 'customers') {
+        const hasNameOrContact = hasAny(['forename', 'surname', 'customerName', 'name', 'companyName', 'email', 'phone', 'mobile']);
+        if (!hasNameOrContact) {
+            return {
+                valid: false,
+                error: 'CSV import rejected: wrong format for Customers (expected First Name / Last Name / Email / Phone / Company columns).'
+            };
+        }
+    } else if (entityType === 'vehicles') {
+        const hasVehicleKey = hasAny(['registration', 'vin']);
+        if (!hasVehicleKey) {
+            return {
+                valid: false,
+                error: 'CSV import rejected: wrong format for Vehicles (missing Registration / VRM or VIN column).'
+            };
+        }
+    } else if (entityType === 'jobs') {
+        const hasJobKey = hasAny(['description', 'scheduledDate', 'id']) && hasAny(['registration', 'customerName', 'customerId', 'scheduledDate', 'description']);
+        if (!hasJobKey) {
+            return {
+                valid: false,
+                error: 'CSV import rejected: wrong format for Jobs (expected Description, Registration/Customer, and Date/ID columns).'
+            };
+        }
+    } else if (entityType === 'invoices') {
+        const hasInvoiceKey = hasAny(['total', 'net', 'grandTotal', 'id']) && hasAny(['issueDate', 'registration', 'customerName', 'customerId', 'id']);
+        if (!hasInvoiceKey) {
+            return {
+                valid: false,
+                error: 'CSV import rejected: wrong format for Invoices (expected Invoice Number/Total and Date/Customer/Reg columns).'
+            };
+        }
+    } else if (entityType === 'parts') {
+        const hasPartKey = hasAny(['partNumber', 'part_number', 'description']);
+        if (!hasPartKey) {
+            return {
+                valid: false,
+                error: 'CSV import rejected: wrong format for Parts (expected Part Number and Description columns).'
+            };
+        }
+    }
+
+    return { valid: true };
+};

@@ -6,7 +6,8 @@ import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText, Mail, Refre
 import EntityFormModal from '../../EntityFormModal';
 import { DocumentLayoutDesignerModal } from '../DocumentLayoutDesignerModal';
 import { useManagementTable } from '../hooks/useManagementTable';
-import { parseCsv } from '../../../utils/csvUtils';
+import { parseCsv, validateCsvData } from '../../../utils/csvUtils';
+import { toast } from 'react-toastify';
 import { generateJobId, generateInvoiceId } from '../../../core/utils/numberGenerators';
 import { splitJobIntoSegments, formatDate } from '../../../core/utils/dateUtils';
 import { isDuplicateJob, isDuplicateInvoice, normalizeVRM } from '../../../core/utils/deduplicationUtils';
@@ -84,6 +85,12 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         onShowStatus('Processing jobs import...', 'info');
         try {
             const data = await parseCsv(file);
+            const validation = validateCsvData(data, 'jobs', file.name);
+            if (!validation.valid) {
+                toast.error(validation.error);
+                onShowStatus(validation.error, 'error');
+                return;
+            }
             const entity = localEntities.find(e => e.id === entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
             
@@ -174,6 +181,12 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         onShowStatus('Processing invoices import...', 'info');
         try {
             const data = await parseCsv(file);
+            const validation = validateCsvData(data, 'invoices', file.name);
+            if (!validation.valid) {
+                toast.error(validation.error);
+                onShowStatus(validation.error, 'error');
+                return;
+            }
             const entity = localEntities.find(e => e.id === entityId);
             const entityShortCode = entity?.shortCode || 'UNK';
             

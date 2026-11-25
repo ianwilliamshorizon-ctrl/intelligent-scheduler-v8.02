@@ -6,7 +6,8 @@ import { PlusCircle, Upload, RefreshCw, Search } from 'lucide-react';
 import { formatCurrency } from '../../../utils/formatUtils';
 import PartFormModal from '../../PartFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
-import { parseCsv } from '../../../utils/csvUtils';
+import { parseCsv, validateCsvData } from '../../../utils/csvUtils';
+import { toast } from 'react-toastify';
 import { db } from '../../../core/db';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 
@@ -129,6 +130,12 @@ export const ManagementPartsTab = ({ searchTerm, onShowStatus }: { searchTerm: s
         onShowStatus("Processing CSV...", "info");
         try {
             const data = await parseCsv(file);
+            const validation = validateCsvData(data, 'parts', file.name);
+            if (!validation.valid) {
+                toast.error(validation.error);
+                onShowStatus(validation.error, 'error');
+                return;
+            }
             const sanitizedParts: Part[] = data.map((row: any) => ({
                 id: row.id || `part_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
                 partNumber: String(row.partNumber || row.part_number || 'UNKNOWN').trim(),

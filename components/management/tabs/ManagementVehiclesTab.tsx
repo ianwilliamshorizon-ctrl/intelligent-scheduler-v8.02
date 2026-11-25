@@ -4,7 +4,8 @@ import { useData } from '../../../core/state/DataContext';
 import { Vehicle, Customer, Job, Estimate, Invoice, InspectionDiagram, PurchaseOrder } from '../../../types';
 import { PlusCircle, Trash2, Upload, RefreshCw, Search, Wand2, Copy } from 'lucide-react';
 import { useManagementTable } from '../hooks/useManagementTable';
-import { parseCsv } from '../../../utils/csvUtils';
+import { parseCsv, validateCsvData } from '../../../utils/csvUtils';
+import { toast } from 'react-toastify';
 import { getCustomerDisplayName } from '../../../core/utils/customerUtils';
 import { isDuplicateVehicle, normalizeVRM, normalizeEmail, normalizePhone } from '../../../core/utils/deduplicationUtils';
 import VehicleFormModal from '../../VehicleFormModal';
@@ -254,6 +255,12 @@ export const ManagementVehiclesTab: React.FC<ManagementVehiclesTabProps> = ({
         onShowStatus("Processing batch vehicle import...", "info");
         try {
             const data = await parseCsv(file);
+            const validation = validateCsvData(data, 'vehicles', file.name);
+            if (!validation.valid) {
+                toast.error(validation.error);
+                onShowStatus(validation.error, 'error');
+                return;
+            }
             const importedVehicles: Vehicle[] = [];
             let count = 0;
             let duplicateCount = 0;

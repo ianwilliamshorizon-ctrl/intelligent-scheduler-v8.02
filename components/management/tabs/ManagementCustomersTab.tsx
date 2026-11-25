@@ -6,7 +6,8 @@ import { PlusCircle, Trash2, Upload, RefreshCw, Search, Mail, Phone, MapPin, Cop
 import { useManagementTable } from '../hooks/useManagementTable';
 import { generateCustomerId, generateCustomerSearchField } from '../../../core/utils/customerUtils';
 import { isDuplicateCustomer } from '../../../core/utils/deduplicationUtils';
-import { parseCsv } from '../../../utils/csvUtils';
+import { parseCsv, validateCsvData } from '../../../utils/csvUtils';
+import { toast } from 'react-toastify';
 import CustomerFormModal from '../../CustomerFormModal';
 import DuplicateCustomersModal from '../DuplicateCustomersModal';
 import { db } from '../../../core/db';
@@ -165,6 +166,12 @@ export const ManagementCustomersTab: React.FC<ManagementCustomersTabProps> = ({ 
 
         try {
             const data = await parseCsv(file);
+            const validation = validateCsvData(data, 'customers', file.name);
+            if (!validation.valid) {
+                toast.error(validation.error);
+                onShowStatus(validation.error, 'error');
+                return;
+            }
             const importedCustomers: Customer[] = [];
             let addedCount = 0;
             let duplicateCount = 0;
