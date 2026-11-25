@@ -413,7 +413,9 @@ export const isDuplicateJob = (j1: Partial<Job>, j2: Partial<Job>): boolean => {
     const hasMatchableOwner = sameVehicle || sameCustomer;
     const d1 = normalizeDateKey(j1.scheduledDate);
     const d2 = normalizeDateKey(j2.scheduledDate);
-    const sameDesc = (j1.description || '').trim().toLowerCase() === (j2.description || '').trim().toLowerCase();
+    const desc1 = (j1.description || '').trim().toLowerCase();
+    const desc2 = (j2.description || '').trim().toLowerCase();
+    const sameDesc = desc1.length > 0 && desc1 === desc2 && (desc1 !== 'imported job' || sameVehicle);
 
     if (sameEntity && hasMatchableOwner && d1 && d1 === d2 && sameDesc) {
         return true;
@@ -442,7 +444,8 @@ export const isDuplicateInvoice = (i1: Partial<Invoice>, i2: Partial<Invoice>): 
     const sameCustomer = !!i1.customerId && i1.customerId === i2.customerId && i1.customerId !== 'unknown_customer';
     const hasMatchableOwner = sameVehicle || sameCustomer;
     const sameDate = normalizeDateKey(i1.issueDate) === normalizeDateKey(i2.issueDate) && !!normalizeDateKey(i1.issueDate);
-    const sameTotal = Math.abs((i1.grandTotal || 0) - (i2.grandTotal || 0)) < 0.01;
+    const nonZeroTotal = Math.abs(i1.grandTotal || 0) > 0;
+    const sameTotal = nonZeroTotal && Math.abs((i1.grandTotal || 0) - (i2.grandTotal || 0)) < 0.01;
 
     return sameEntity && hasMatchableOwner && sameDate && sameTotal;
 };

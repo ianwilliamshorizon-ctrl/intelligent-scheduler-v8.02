@@ -17,7 +17,9 @@ export const headerMapping: { [key: string]: string } = {
     'vehicle make': 'make', 'make': 'make',
     'vehicle model': 'model', 'model': 'model',
     'engine size': 'cc', 'engine_cc': 'cc', 'engine': 'cc',
-    'vin number': 'vin', 'vin': 'vin',
+    'vin number': 'vin', 'vin no': 'vin', 'vin': 'vin', 'chassis': 'vin', 'chassis number': 'vin',
+    'fuel type': 'fuelType', 'fuel_type': 'fuelType', 'fuel': 'fuelType',
+    'colour': 'colour', 'color': 'colour', 'paint': 'colour',
     'mot expiry': 'nextMotDate', 'mot_date': 'nextMotDate', 'mot': 'nextMotDate',
     'service due': 'nextServiceDate', 'service_date': 'nextServiceDate', 'service': 'nextServiceDate',
     'manufacture date': 'manufactureDate', 'manufacture_date': 'manufactureDate', 'manufacturedate': 'manufactureDate',
@@ -49,20 +51,20 @@ export const headerMapping: { [key: string]: string } = {
     'owner': 'customerName', 'customer': 'customerName', 'client': 'customerName',
     
     // Jobs
-    'job id': 'id', 'job_id': 'id', 'jobid': 'id',
-    'job description': 'description', 'work required': 'description',
+    'job id': 'id', 'job_id': 'id', 'jobid': 'id', 'job no': 'id', 'job no.': 'id', 'job number': 'id', 'job_number': 'id',
+    'job description': 'description', 'work required': 'description', 'work': 'description', 'details': 'description',
     'estimated hours': 'estimatedHours', 'hours': 'estimatedHours', 'est hours': 'estimatedHours',
-    'scheduled date': 'scheduledDate', 'date': 'scheduledDate',
+    'scheduled date': 'scheduledDate', 'booking date': 'scheduledDate', 'date': 'scheduledDate',
     'created at': 'createdAt', 'created_at': 'createdAt',
     'mileage': 'mileage', 'key number': 'keyNumber', 'key_number': 'keyNumber',
-    'status': 'status',
+    'status': 'status', 'notes': 'notes',
 
     // Invoices
-    'invoice number': 'id', 'invoice_number': 'id', 'invoice no': 'id',
+    'invoice number': 'id', 'invoice_number': 'id', 'invoice no': 'id', 'invoice no.': 'id', 'inv no': 'id', 'inv number': 'id',
     'issue date': 'issueDate', 'invoice date': 'issueDate', 'date issued': 'issueDate',
     'due date': 'dueDate', 'payment due': 'dueDate',
     // status reused from jobs
-    'total': 'total', 'amount': 'total', 'gross': 'total', 'total gross': 'total',
+    'total': 'total', 'amount': 'total', 'gross': 'total', 'total gross': 'total', 'grand total': 'total', 'total inc vat': 'total',
     'net': 'net', 'subtotal': 'net',
 };
 
