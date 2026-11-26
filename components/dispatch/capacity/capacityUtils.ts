@@ -149,25 +149,51 @@ export const calculateDailyCapacity = (params: {
         if (hoursPerTech <= 0) hoursPerTech = 8.0;
     }
 
-    // STRICT: Capacity is solely derived from available engineers, NOT from lifts/ramps!
+    // Capacity is bounded by BOTH working staff for each entity AND available ramps/lifts
     let availableHours = 0;
     if (hoursPerTech === 0) {
         availableHours = 0;
-    } else if (entityEngineers.length > 0) {
-        // Sum productive hours of each technician based on their attendance factor
-        let totalTechHours = 0;
-        entityEngineers.forEach(eng => {
-            const factor = engineerAvailabilityFactor.get(eng.id) ?? 1.0;
-            totalTechHours += factor * hoursPerTech;
+    } else if (selectedEntityId === 'all' && businessEntities.length > 0) {
+        let combinedHours = 0;
+        businessEntities.forEach(ent => {
+            const entTechs = entityEngineers.filter(e =>
+                (e.isTransferred && e.transferredToEntityId === ent.id) ||
+                (!e.isTransferred && e.entityId === ent.id)
+            );
+            const entLifts = entityLifts.filter(l => l.entityId === ent.id);
+            const staffHours = entTechs.reduce((sum, eng) => sum + (engineerAvailabilityFactor.get(eng.id) ?? 1.0) * hoursPerTech, 0);
+            const rampHours = entLifts.length * hoursPerTech;
+            if (entTechs.length > 0 && entLifts.length > 0) {
+                combinedHours += Math.min(staffHours, rampHours);
+            } else if (entTechs.length > 0) {
+                combinedHours += staffHours;
+            } else if (entLifts.length > 0) {
+                combinedHours += rampHours;
+            } else if (ent.dailyCapacityHours && !isSunday && !isHoliday) {
+                combinedHours += isSaturday ? ent.dailyCapacityHours * 0.4 : ent.dailyCapacityHours;
+            }
         });
-        availableHours = totalTechHours;
+        availableHours = combinedHours;
+    } else if (entityEngineers.length > 0 || entityLifts.length > 0) {
+        const staffHours = entityEngineers.reduce(
+            (sum, eng) => sum + (engineerAvailabilityFactor.get(eng.id) ?? 1.0) * hoursPerTech,
+            0
+        );
+        const rampHours = entityLifts.length * hoursPerTech;
+        if (entityEngineers.length > 0 && entityLifts.length > 0) {
+            availableHours = Math.min(staffHours, rampHours);
+        } else if (entityEngineers.length > 0) {
+            availableHours = staffHours;
+        } else {
+            availableHours = rampHours;
+        }
     } else if (targetEntity?.dailyCapacityHours && !isSunday && !isHoliday) {
         availableHours = isSaturday ? targetEntity.dailyCapacityHours * 0.4 : targetEntity.dailyCapacityHours;
     } else {
         availableHours = isSaturday ? 16 : 40;
     }
 
-    // Calculate booked hours from non-cancelled jobs
+    // Calculate booked hours from active jobs (Cancelled and Paused/On-Hold jobs release their hours & ramps)
     let bookedHours = 0;
     const occupiedLiftIds = new Set<string>();
     let jobsCount = 0;
@@ -176,12 +202,12 @@ export const calculateDailyCapacity = (params: {
     entityLifts.forEach(l => liftHoursMap.set(l.id, 0));
 
     jobs.forEach(job => {
-        if (job.status === 'Cancelled') return;
+        if (job.status === 'Cancelled' || job.status === 'Paused') return;
         if (selectedEntityId !== 'all' && job.entityId && job.entityId !== selectedEntityId) return;
 
         let hasSegmentOnDate = false;
         (job.segments || []).forEach(segment => {
-            if (segment.date === dateStr && segment.status !== 'Cancelled') {
+            if (segment.date === dateStr && segment.status !== 'Cancelled' && segment.status !== 'Paused') {
                 const duration = Number(segment.duration) || 0;
                 bookedHours += duration;
                 hasSegmentOnDate = true;
@@ -490,9 +516,9 @@ export const findSpareCapacitySlots = (params: {
             const occupiedSegments = new Array(maxSegmentsToday).fill(false);
 
             jobs.forEach(job => {
-                if (job.status === 'Cancelled') return;
+                if (job.status === 'Cancelled' || job.status === 'Paused') return;
                 (job.segments || []).forEach(seg => {
-                    if (seg.date === dateStr && seg.allocatedLift === lift.id && seg.status !== 'Cancelled') {
+                    if (seg.date === dateStr && seg.allocatedLift === lift.id && seg.status !== 'Cancelled' && seg.status !== 'Paused') {
                         if (seg.scheduledStartSegment !== null && seg.scheduledStartSegment !== undefined) {
                             const segDuration = Number(seg.duration) || 1;
                             const slotCount = Math.ceil(segDuration * (60 / SEGMENT_DURATION_MINUTES));
@@ -681,7 +707,7 @@ export const findCapacityWarnings = (params: {
     const startStr = formatDate(startDate);
 
     jobs.forEach(job => {
-        if (['Cancelled', 'Invoiced', 'Complete', 'Closed', 'Archived'].includes(job.status)) return;
+        if (['Cancelled', 'Paused', 'Invoiced', 'Complete', 'Closed', 'Archived'].includes(job.status)) return;
         if (selectedEntityId !== 'all' && job.entityId && job.entityId !== selectedEntityId) return;
 
         const segments = job.segments || [];
@@ -705,7 +731,7 @@ export const findCapacityWarnings = (params: {
         }
 
         segments.forEach(seg => {
-            if (seg.status === 'Cancelled' || seg.status === 'Engineer Complete' || seg.status === 'QC Complete') return;
+            if (seg.status === 'Cancelled' || seg.status === 'Paused' || seg.status === 'Engineer Complete' || seg.status === 'QC Complete') return;
 
             const isUnassignedState = seg.status === 'Unallocated' || (!seg.allocatedLift && !seg.engineerId);
 
@@ -768,9 +794,9 @@ export const findCapacityWarnings = (params: {
         let conflictDate = '';
 
         jobs.forEach(job => {
-            if (job.status === 'Cancelled' || job.status === 'Complete') return;
+            if (job.status === 'Cancelled' || job.status === 'Paused' || job.status === 'Complete') return;
             (job.segments || []).forEach(seg => {
-                if (seg.engineerId === abs.userId && seg.date && seg.date >= abs.startDate && seg.date <= abs.endDate && seg.status !== 'Cancelled') {
+                if (seg.engineerId === abs.userId && seg.date && seg.date >= abs.startDate && seg.date <= abs.endDate && seg.status !== 'Cancelled' && seg.status !== 'Paused') {
                     conflictedHours += Number(seg.duration) || 1;
                     conflictDate = seg.date;
                 }
@@ -809,9 +835,9 @@ export const findCapacityWarnings = (params: {
             // Find tech's segments on this date
             const techSegments: { start: number; duration: number; liftId?: string }[] = [];
             jobs.forEach(job => {
-                if (job.status === 'Cancelled') return;
+                if (job.status === 'Cancelled' || job.status === 'Paused') return;
                 (job.segments || []).forEach(seg => {
-                    if (seg.engineerId === tech.id && seg.date === dateStr && seg.scheduledStartSegment !== null && seg.scheduledStartSegment !== undefined && seg.status !== 'Cancelled') {
+                    if (seg.engineerId === tech.id && seg.date === dateStr && seg.scheduledStartSegment !== null && seg.scheduledStartSegment !== undefined && seg.status !== 'Cancelled' && seg.status !== 'Paused') {
                         techSegments.push({
                             start: seg.scheduledStartSegment,
                             duration: Math.ceil((Number(seg.duration) || 1) * 2),
