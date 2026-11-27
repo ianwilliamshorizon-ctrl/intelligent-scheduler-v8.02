@@ -242,7 +242,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
 
     return (
         <div className="fixed inset-0 bg-gray-900 bg-opacity-75 z-[50] flex justify-center items-center p-4">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden">
+            <div className="bg-white rounded-xl shadow-2xl w-full max-w-[95vw] xl:max-w-[1480px] h-[90vh] flex flex-col overflow-hidden">
                 <header className="flex-shrink-0 flex justify-between items-center p-4 border-b bg-gray-50">
                     <div className="flex items-center gap-4">
                         <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
