@@ -530,7 +530,7 @@ User Request: ${JSON.stringify(userText)}`;
             // 1. Identify matched service packages using scoring and vehicle compatibility
             const matchedPackages: ServicePackage[] = [];
             const activeVehicle = found || foundVehicle;
-            const scoredAll = getScoredServicePackages(servicePackages, activeVehicle);
+            const scoredAll = getScoredServicePackages((servicePackages || []).filter(p => p.isActive !== false), activeVehicle);
             const compatibleScored = scoredAll.filter(item => item.score >= 1);
             
             // Resolve packages explicitly identified by AI

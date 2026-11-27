@@ -667,7 +667,7 @@ const EstimateFormModal: React.FC<EstimateFormModalProps> = ({
     // Compute matches for current branch vs other branches
     const matchingPackagesResult = useMemo(() => {
         const term = String(packageSearchTerm || '').toLowerCase().trim();
-        const allPkgs = Array.isArray(servicePackages) ? servicePackages : [];
+        const allPkgs = (Array.isArray(servicePackages) ? servicePackages : []).filter(p => p.isActive !== false);
         const currentPkgs = allPkgs.filter(p => !p.entityId || p.entityId === formData.entityId);
         const otherPkgs = allPkgs.filter(p => p.entityId && p.entityId !== formData.entityId);
         

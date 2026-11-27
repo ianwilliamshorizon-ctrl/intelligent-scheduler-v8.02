@@ -584,6 +584,7 @@ export const ReceptionistBookingModal: React.FC<ReceptionistBookingModalProps> =
         const selectedSet = new Set(selectedPackageIds);
         return (servicePackages || []).filter(pkg => {
             if (selectedSet.has(pkg.id)) return true;
+            if (pkg.isActive === false) return false;
             if (!pkg.entityId || pkg.entityId === 'all') return true;
             if (pkg.entityId === selectedEntity.id) return true;
             return includedSet.has(pkg.entityId);

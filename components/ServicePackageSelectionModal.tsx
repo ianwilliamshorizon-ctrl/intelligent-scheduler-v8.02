@@ -36,9 +36,10 @@ export const ServicePackageSelectionModal: React.FC<ServicePackageSelectionModal
     const [sortBy, setSortBy] = useState<'likelihood' | 'name' | 'price_asc' | 'price_desc'>('likelihood');
     const prevIsOpenRef = useRef(false);
 
-    // Score all packages against vehicle
+    // Score all active packages against vehicle
     const scoredPackages = useMemo(() => {
-        return getScoredServicePackages(servicePackages, vehicle);
+        const activeOnly = (servicePackages || []).filter(p => p.isActive !== false);
+        return getScoredServicePackages(activeOnly, vehicle);
     }, [servicePackages, vehicle]);
 
     useEffect(() => {

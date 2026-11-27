@@ -38,6 +38,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
     const [sortField, setSortField] = useState<SortField>('name');
     const [sortOrder, setSortOrder] = useState<SortOrder>('asc');
     const [entityFilter, setEntityFilter] = useState<string>('all');
+    const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
     
     // Bulk Update State
     const [isBulkPanelOpen, setIsBulkPanelOpen] = useState(false);
@@ -55,6 +56,12 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
             results = results.filter(p => p.entityId === entityFilter);
         }
 
+        if (statusFilter === 'active') {
+            results = results.filter(p => p.isActive !== false);
+        } else if (statusFilter === 'inactive') {
+            results = results.filter(p => p.isActive === false);
+        }
+
         return results.sort((a, b) => {
             let valA = a[sortField] || '';
             let valB = b[sortField] || '';
@@ -66,7 +73,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
             if (valA > valB) return sortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [servicePackages, searchTerm, entityFilter, sortField, sortOrder]);
+    }, [servicePackages, searchTerm, entityFilter, statusFilter, sortField, sortOrder]);
 
     const handleClone = (pkg: ServicePackage) => {
         const newPackage = JSON.parse(JSON.stringify(pkg));
@@ -226,6 +233,19 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                     </div>
 
                     <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-sm">
+                        <span className="text-sm font-medium text-gray-700">Status:</span>
+                        <select
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                            className="text-sm border-none bg-transparent focus:ring-0 outline-none pr-6 cursor-pointer"
+                        >
+                            <option value="all">All</option>
+                            <option value="active">Active Only</option>
+                            <option value="inactive">Inactive / Staged</option>
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border shadow-sm">
                         <ArrowUpDown size={16} className="text-gray-400" />
                         <span className="text-sm font-medium text-gray-700">Sort by:</span>
                         <button 
@@ -366,17 +386,38 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                             <tr className="border-b">
                                 <th className="p-4 font-semibold text-gray-600 uppercase tracking-wider">Package Name</th>
                                 <th className="p-4 font-semibold text-gray-600 uppercase tracking-wider">Entity</th>
+                                <th className="p-4 font-semibold text-gray-600 uppercase tracking-wider text-center">Status</th>
                                 <th className="p-4 font-semibold text-gray-600 uppercase tracking-wider text-right">Total Price</th>
                                 <th className="p-4 font-semibold text-gray-600 uppercase tracking-wider text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filteredAndSortedPackages.length > 0 ? (
-                                filteredAndSortedPackages.map(p => (
-                                    <tr key={p.id} className="hover:bg-indigo-50/30 transition-colors group">
+                                filteredAndSortedPackages.map(p => {
+                                    const isActive = p.isActive !== false;
+                                    return (
+                                    <tr key={p.id} className={`hover:bg-indigo-50/30 transition-colors group ${!isActive ? 'opacity-65 bg-gray-50/50' : ''}`}>
                                         <td className="p-4 font-medium text-gray-900">{p.name}</td>
                                         <td className="p-4 text-gray-500 italic text-xs">
                                             {businessEntities.find(e => e.id === p.entityId)?.name || 'Multiple/All'}
+                                        </td>
+                                        <td className="p-4 text-center">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const nextActive = !isActive;
+                                                    updateItem({ ...p, isActive: nextActive });
+                                                    onShowStatus(`"${p.name}" ${nextActive ? 'activated' : 'deactivated'}.`, 'success');
+                                                }}
+                                                className={`px-2.5 py-1 rounded-full text-xs font-bold border transition cursor-pointer ${
+                                                    isActive
+                                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                                                        : 'bg-gray-100 text-gray-600 border-gray-300 hover:bg-gray-200'
+                                                }`}
+                                                title={isActive ? 'Click to deactivate (hide from bookings/estimates)' : 'Click to activate for launch'}
+                                            >
+                                                {isActive ? 'Active' : 'Inactive'}
+                                            </button>
                                         </td>
                                         <td className="p-4 text-right font-semibold text-gray-900">
                                             {formatCurrency(p.totalPrice)}
@@ -407,10 +448,11 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
                                             </div>
                                         </td>
                                     </tr>
-                                ))
+                                    );
+                                })
                             ) : (
                                 <tr>
-                                    <td colSpan={4} className="p-8 text-center text-gray-500">
+                                    <td colSpan={5} className="p-8 text-center text-gray-500">
                                         No service packages found matching your criteria.
                                     </td>
                                 </tr>

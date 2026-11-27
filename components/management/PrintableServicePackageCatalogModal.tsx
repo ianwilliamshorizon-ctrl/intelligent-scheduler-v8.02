@@ -29,6 +29,7 @@ export const filterServicePackagesForCatalog = (
 ): ServicePackage[] => {
     const kw = criteria.keyword.trim().toLowerCase();
     return (packages || []).filter(pkg => {
+        if (pkg.isActive === false) return false;
         if (criteria.entityId !== 'all' && pkg.entityId !== criteria.entityId) return false;
         if (criteria.tier !== 'all' && detectPackageTier(pkg) !== criteria.tier) return false;
         if (criteria.make !== 'all' && (pkg.applicableMake || '').trim().toLowerCase() !== criteria.make.toLowerCase()) return false;

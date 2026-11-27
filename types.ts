@@ -819,6 +819,7 @@ export interface ServicePackage {
     applicableVariant?: string;
     applicableEngineSize?: number;
     taxCodeId?: string;
+    isActive?: boolean;
     isStorageCharge?: boolean;
     storageBookingId?: string;
 }

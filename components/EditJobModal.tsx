@@ -96,7 +96,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
     const safeEstimates = Array.isArray(estimates) ? estimates : [];
     const safeSuppliers = Array.isArray(suppliers) ? suppliers : [];
     const safeParts = Array.isArray(parts) ? parts : [];
-    const safeServicePackages = Array.isArray(servicePackages) ? servicePackages : [];
+    const safeServicePackages = (Array.isArray(servicePackages) ? servicePackages : []).filter(p => p.isActive !== false);
     const safeTaxRates = Array.isArray(taxRates) ? taxRates : [];
     const safeBusinessEntities = Array.isArray(businessEntities) ? businessEntities : [];
     const safeEngineers = Array.isArray(engineers) ? engineers : [];

@@ -24,8 +24,8 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
     useEffect(() => { 
         if (isOpen) {
             const initialData = servicePackage 
-                ? { ...servicePackage, costItems: servicePackage.costItems || [] }
-                : { entityId, name: '', description: '', totalPrice: 0, costItems: [], taxCodeId: standardTaxRateId };
+                ? { ...servicePackage, isActive: servicePackage.isActive !== false, costItems: servicePackage.costItems || [] }
+                : { entityId, name: '', description: '', totalPrice: 0, costItems: [], taxCodeId: standardTaxRateId, isActive: true };
             
             if (!initialData.taxCodeId) {
                 initialData.taxCodeId = standardTaxRateId;
@@ -285,6 +285,23 @@ const ServicePackageFormModal = ({ isOpen, onClose, onSave, servicePackage, taxR
                 <div className="mt-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
                     <textarea name="description" value={formData.description || ''} onChange={handleChange} placeholder="Optional details about the package" className="w-full p-2 border rounded" rows={2}/>
+                </div>
+                <div className="mt-3 p-3 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-between">
+                    <div>
+                        <div className="text-sm font-semibold text-gray-800">Active / Live for Booking &amp; Estimates</div>
+                        <div className="text-xs text-gray-500">Uncheck to stage or prepare this package before launch without showing it to staff.</div>
+                    </div>
+                    <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={formData.isActive !== false}
+                            onChange={e => setFormData(p => ({ ...p, isActive: e.target.checked }))}
+                            className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${formData.isActive !== false ? 'bg-emerald-100 text-emerald-800' : 'bg-gray-200 text-gray-700'}`}>
+                            {formData.isActive !== false ? 'Active' : 'Inactive'}
+                        </span>
+                    </label>
                 </div>
                 
                 <div className="mt-4 p-4 bg-gray-50 border rounded-lg">
