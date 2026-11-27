@@ -925,14 +925,15 @@ export const downloadServicePackageExcelTemplate = async (businessEntities: Busi
 /**
  * Exports service packages array to a neatly formatted CSV file and triggers download
  */
-export const exportServicePackagesToCsv = (
+export const buildServicePackageExportRows = (
     packages: ServicePackage[],
-    businessEntities: BusinessEntity[] = [],
-    filename: string = 'service_packages_export.csv'
-) => {
+    businessEntities: BusinessEntity[] = []
+): string[][] => {
     const entityMap = new Map((businessEntities || []).map(e => [e.id, e.name || 'Universal']));
-    
+
     const headers = [
+        "Package #",
+        "Status",
         "Package Name",
         "Business Entity",
         "Package Description",
@@ -940,19 +941,29 @@ export const exportServicePackagesToCsv = (
         "Vehicle Model",
         "Vehicle Variant",
         "Engine Size",
+        "Total Labour Hrs",
+        "Package Price Gross (£)",
+        "Item #",
         "Item Type",
         "Item Description",
         "Part Number",
         "Quantity",
-        "Unit Price",
-        "Unit Cost",
-        "Tax Code",
-        "Package Fixed Price Gross"
+        "Unit Price (£)",
+        "Line Total (£)",
+        "Unit Cost (£)",
+        "Tax Code"
     ];
 
     const rows: string[][] = [headers];
 
-    (packages || []).forEach(pkg => {
+    const sortedPackages = [...(packages || [])].sort((a, b) => {
+        const entA = (a.entityId ? entityMap.get(a.entityId) : null) || 'Universal';
+        const entB = (b.entityId ? entityMap.get(b.entityId) : null) || 'Universal';
+        if (entA !== entB) return entA.localeCompare(entB);
+        return (a.name || '').localeCompare(b.name || '');
+    });
+
+    sortedPackages.forEach((pkg, pkgIdx) => {
         const entityName = (pkg.entityId ? entityMap.get(pkg.entityId) : null) || 'Brookspeed Porsche & Performance';
         const costItems = (pkg.costItems && pkg.costItems.length > 0) ? pkg.costItems : [
             {
@@ -965,27 +976,58 @@ export const exportServicePackagesToCsv = (
             } as any
         ];
 
+        const totalLabourHours = costItems
+            .filter(i => i.isLabor || i.type === 'labor')
+            .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0);
+
+        const pkgCode = `PKG-${String(pkgIdx + 1).padStart(3, '0')}`;
+        const statusLabel = pkg.isActive === false ? 'Inactive' : 'Active';
+
         costItems.forEach((item, idx) => {
             const isFirstRow = idx === 0;
+            const qty = Number(item.quantity ?? 1);
+            const unitPrice = Number(item.unitPrice || 0);
+            const lineTotal = qty * unitPrice;
+
             rows.push([
-                pkg.name || '',
-                entityName,
+                isFirstRow ? pkgCode : '',
+                isFirstRow ? statusLabel : '',
+                isFirstRow ? (pkg.name || '') : '',
+                isFirstRow ? entityName : '',
                 isFirstRow ? (pkg.description || '') : '',
                 isFirstRow ? (pkg.applicableMake || '') : '',
                 isFirstRow ? (pkg.applicableModel || '') : '',
                 isFirstRow ? (pkg.applicableVariant || '') : '',
                 isFirstRow && pkg.applicableEngineSize ? String(pkg.applicableEngineSize) : '',
+                isFirstRow ? totalLabourHours.toFixed(2) : '',
+                isFirstRow && pkg.totalPrice ? Number(pkg.totalPrice).toFixed(2) : '',
+                `${idx + 1} of ${costItems.length}`,
                 item.isLabor || item.type === 'labor' ? 'Labour' : 'Part',
                 item.description || '',
                 item.partNumber || '',
-                String(item.quantity ?? 1),
-                Number(item.unitPrice || 0).toFixed(2),
+                String(qty),
+                unitPrice.toFixed(2),
+                lineTotal.toFixed(2),
                 Number(item.unitCost || 0).toFixed(2),
-                item.taxCodeId === 'tax_1' || item.taxCodeId === 'T0' ? 'T0' : 'T1',
-                isFirstRow && pkg.totalPrice ? Number(pkg.totalPrice).toFixed(2) : ''
+                item.taxCodeId === 'tax_1' || item.taxCodeId === 'T0' ? 'T0' : 'T1'
             ]);
         });
+
+        // Blank separator row between packages for clear visual grouping in Excel
+        if (pkgIdx < sortedPackages.length - 1) {
+            rows.push(new Array(headers.length).fill(''));
+        }
     });
+
+    return rows;
+};
+
+export const exportServicePackagesToCsv = (
+    packages: ServicePackage[],
+    businessEntities: BusinessEntity[] = [],
+    filename: string = 'service_packages_export.csv'
+) => {
+    const rows = buildServicePackageExportRows(packages, businessEntities);
 
     const csvContent = rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(',')).join('\r\n');
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
