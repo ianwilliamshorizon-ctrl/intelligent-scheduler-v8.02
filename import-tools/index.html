@@ -107,6 +107,7 @@
 
     <div class="tabs">
       <button class="tab-btn active" type="button" data-tab="invoices">Invoices</button>
+      <button class="tab-btn" type="button" data-tab="jobs">Job Cards</button>
       <button class="tab-btn" type="button" data-tab="customers">Customers</button>
       <button class="tab-btn" type="button" data-tab="vehicles">Vehicles</button>
     </div>
@@ -165,6 +166,26 @@
         <div id="vehicleOptions" class="hidden">
           <label for="defaultVehicleColour">Default Colour (when blank)</label>
           <input id="defaultVehicleColour" type="text" value="Silver" />
+        </div>
+
+        <div id="jobOptions" class="hidden">
+          <label for="defaultJobStatus">Default Status for Imported Job Cards</label>
+          <select id="defaultJobStatus">
+            <option value="Closed">Closed</option>
+            <option value="Complete">Complete</option>
+            <option value="Invoiced">Invoiced</option>
+            <option value="Booked In">Booked In</option>
+          </select>
+          <div class="row-2">
+            <div>
+              <label for="jobIdPrefix">Job ID Prefix</label>
+              <input id="jobIdPrefix" type="text" placeholder="Optional" />
+            </div>
+            <div>
+              <label for="jobEntityId">Entity ID (optional)</label>
+              <input id="jobEntityId" type="text" placeholder="e.g. ent_porsche" />
+            </div>
+          </div>
         </div>
 
         <div class="actions">
@@ -566,6 +587,80 @@
       return { items, rejected, unmatched };
     }
 
+    // --- 4. JOB CARDS ---
+    function transformJobs(records, opts) {
+      const { defaultStatus, idPrefix, entityId, backupJson } = opts;
+      const { customersByKey, vehiclesByReg, vehiclesByVin } = buildLookupMaps(backupJson);
+      const items = [], rejected = [], unmatched = [], seenIds = new Set();
+
+      for (const row of records) {
+        const rowNum = row.__rowNumber;
+        const rawJobNo = pick(row, ['id', 'Job No', 'Job No.', 'Job Number', 'Our Job No', 'Job ID', 'JobCard No', 'Job Card No']);
+        if (!rawJobNo) {
+          rejected.push({ rowNumber: rowNum, key: '', reason: 'Missing Job No / ID' });
+          continue;
+        }
+        const id = `${idPrefix}${rawJobNo}`;
+        if (seenIds.has(id.toUpperCase())) {
+          rejected.push({ rowNumber: rowNum, key: id, reason: 'Duplicate Job ID in file' });
+          continue;
+        }
+        seenIds.add(id.toUpperCase());
+
+        const legacyCust = pick(row, ['Customer', 'Account Code', 'customerId']);
+        const custName = pick(row, ['Customer Name', 'Owner', 'customerName']);
+        const matchedCustomerId = customersByKey.get(legacyCust.toUpperCase()) || customersByKey.get(custName.toUpperCase()) || null;
+
+        const regNorm = normalizeReg(pick(row, ['Vehicle', 'Registration', 'Reg', 'VRM', 'vehicleRegistration']));
+        const rawVin = pick(row, ['VIN', 'vin']).toUpperCase();
+        const vinNorm = rawVin === 'NULL' ? '' : rawVin;
+        const matchedVehicleId = (regNorm && vehiclesByReg.get(regNorm)) || (vinNorm && vehiclesByVin.get(vinNorm)) || null;
+
+        if (backupJson && (!matchedCustomerId || !matchedVehicleId)) {
+          unmatched.push({
+            rowNumber: rowNum,
+            key: id,
+            reason: `${!matchedCustomerId ? 'Unmatched Customer (' + legacyCust + ')' : ''}${!matchedCustomerId && !matchedVehicleId ? '; ' : ''}${!matchedVehicleId ? 'Unmatched Vehicle (' + regNorm + ')' : ''}`
+          });
+        }
+
+        const scheduledDate = parseUkDateToIso(pick(row, ['Scheduled Date', 'Job Date', 'Booking Date', 'Date', 'Invoice Date', 'scheduledDate'])) || '';
+        const createdAt = parseUkDateToIso(pick(row, ['Created Date', 'createdAt'])) || scheduledDate;
+        const description = pick(row, ['Description', 'Job Details', 'Work Required', 'Details']).replace(/\s+/g, ' ').trim() || `Legacy Job #${rawJobNo}`;
+        const explicitNotes = pick(row, ['Notes', 'Comments', 'notes']).replace(/\s+/g, ' ').trim();
+        const mechanic = pick(row, ['Mechanic', 'mechanic']);
+        const jobTotalRaw = pick(row, ['Job Total', 'jobTotal']);
+        const extraMeta = [];
+        if (mechanic) extraMeta.push(`Legacy Mechanic: ${mechanic}`);
+        if (jobTotalRaw && Number(jobTotalRaw) > 0) extraMeta.push(`Legacy Job Total: £${Number(jobTotalRaw).toFixed(2)}`);
+        const notes = explicitNotes || extraMeta.join(' | ');
+        const invoiceId = pick(row, ['Invoice No', 'Invoice Number', 'invoiceId']);
+        const estHrsRaw = pick(row, ['Estimated Hours', 'Hours', 'Est Hours', 'estimatedHours']);
+        const mileageRaw = pick(row, ['Mileage', 'mileage']);
+        const keyNumber = pick(row, ['Key No', 'Key Number', 'keyNumber']);
+
+        items.push({
+          id,
+          jobNumber: id,
+          customerId: matchedCustomerId || legacyCust || custName || 'UNKNOWN_CUSTOMER',
+          vehicleId: matchedVehicleId || regNorm || vinNorm || 'UNKNOWN_VEHICLE',
+          ...(regNorm ? { vehicleRegistration: regNorm } : {}),
+          description,
+          status: defaultStatus,
+          ...(scheduledDate ? { scheduledDate } : {}),
+          ...(createdAt ? { createdAt } : {}),
+          ...(scheduledDate ? { completedAt: scheduledDate } : {}),
+          ...(notes ? { notes } : {}),
+          ...(estHrsRaw && !Number.isNaN(Number(estHrsRaw)) ? { estimatedHours: Number(estHrsRaw) } : {}),
+          ...(mileageRaw && !Number.isNaN(Number(mileageRaw)) ? { mileage: Number(mileageRaw) } : {}),
+          ...(keyNumber ? { keyNumber } : {}),
+          ...(invoiceId ? { invoiceId } : {}),
+          ...(entityId ? { entityId } : {}),
+        });
+      }
+      return { items, rejected, unmatched };
+    }
+
     // --- UI STATE & RENDERING ---
     let activeTab = 'invoices';
     let currentRecords = null;
@@ -594,6 +689,13 @@
         collectionKey: 'brooks_vehicles',
         headers: ['Registration', 'Make', 'Model', 'VIN', 'Colour', 'Customer ID', 'Fuel', 'CC', 'MOT Due'],
         csvHeaders: ['id','customerId','registration','make','model','vin','cc','engineNumber','fuelType','colour','nextServiceDate','nextMotDate','winterCheckDate','fleetNumber','manufactureDate','covid19MotExemption','transmissionType','previousRegistrations','images'],
+      },
+      jobs: {
+        dropLabel: 'Drop Legacy Job Cards CSV here',
+        unmatchedLbl: 'Unmatched Links',
+        collectionKey: 'brooks_jobs',
+        headers: ['Job #', 'Date', 'Status', 'Customer ID', 'Vehicle', 'Invoice #', 'Mileage', 'Description'],
+        csvHeaders: ['id','customerId','vehicleId','vehicleRegistration','description','status','scheduledDate','createdAt','completedAt','estimatedHours','mileage','keyNumber','invoiceId','entityId','notes'],
       }
     };
 
@@ -605,6 +707,7 @@
       document.getElementById('invoiceOptions').classList.toggle('hidden', tab !== 'invoices');
       document.getElementById('customerOptions').classList.toggle('hidden', tab !== 'customers');
       document.getElementById('vehicleOptions').classList.toggle('hidden', tab !== 'vehicles');
+      document.getElementById('jobOptions').classList.toggle('hidden', tab !== 'jobs');
       currentRecords = null;
       currentResult = null;
       document.getElementById('csvFileName').textContent = 'or click to browse (.csv)';
@@ -641,9 +744,16 @@
         currentResult = transformCustomers(currentRecords, {
           defaultCategory: document.getElementById('defaultCustomerCategory').value,
         });
-      } else {
+      } else if (activeTab === 'vehicles') {
         currentResult = transformVehicles(currentRecords, {
           defaultColour: document.getElementById('defaultVehicleColour').value.trim() || 'Silver',
+          backupJson: currentBackupJson,
+        });
+      } else {
+        currentResult = transformJobs(currentRecords, {
+          defaultStatus: document.getElementById('defaultJobStatus').value,
+          idPrefix: document.getElementById('jobIdPrefix').value.trim(),
+          entityId: document.getElementById('jobEntityId').value.trim(),
           backupJson: currentBackupJson,
         });
       }
@@ -698,7 +808,7 @@
             <td class="mono">${item.postcode || '—'}</td>
             <td>${[item.addressLine1, item.city].filter(Boolean).join(', ') || '—'}</td>
           `;
-        } else {
+        } else if (activeTab === 'vehicles') {
           tr.innerHTML = `
             <td class="mono"><strong>${item.registration || '—'}</strong></td>
             <td>${item.make}</td>
@@ -709,6 +819,17 @@
             <td>${item.fuelType || '—'}</td>
             <td class="mono">${item.cc || '—'}</td>
             <td class="mono">${item.nextMotDate || '—'}</td>
+          `;
+        } else {
+          tr.innerHTML = `
+            <td class="mono"><strong>${item.id}</strong></td>
+            <td class="mono">${item.scheduledDate || '—'}</td>
+            <td><span class="pill pill-Draft">${item.status}</span></td>
+            <td class="mono">${item.customerId}</td>
+            <td class="mono">${item.vehicleRegistration || item.vehicleId}</td>
+            <td class="mono">${item.invoiceId || '—'}</td>
+            <td class="mono">${item.mileage || '—'}</td>
+            <td style="max-width:260px">${(item.description || '').slice(0, 100)}</td>
           `;
         }
         tbody.appendChild(tr);
@@ -748,7 +869,7 @@
       runTransform();
     });
 
-    ['vatRate', 'termsDays', 'idPrefix', 'entityId', 'markAllPaid', 'defaultCustomerCategory', 'defaultVehicleColour'].forEach(id => {
+    ['vatRate', 'termsDays', 'idPrefix', 'entityId', 'markAllPaid', 'defaultCustomerCategory', 'defaultVehicleColour', 'defaultJobStatus', 'jobIdPrefix', 'jobEntityId'].forEach(id => {
       document.getElementById(id).addEventListener('input', runTransform);
       document.getElementById(id).addEventListener('change', runTransform);
     });

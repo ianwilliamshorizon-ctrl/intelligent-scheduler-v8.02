@@ -28,7 +28,6 @@ import {
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 import { ManagementBookingScriptsTab } from './management/tabs/ManagementBookingScriptsTab';
 import { ManagementTrainingTab } from './management/tabs/ManagementTrainingTab';
-import { ManagementInvoicesTab } from './management/tabs/ManagementInvoicesTab';
 import { Award } from 'lucide-react';
 
 // Utilities
@@ -95,7 +94,6 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'customers', label: 'Customers', icon: UserIcon, render: () => <ManagementCustomersTab searchTerm={searchTerm} onShowStatus={showStatus} onViewVehicle={onViewVehicle} />, permission: 'canManageCustomers' },
         // UPDATED BELOW: Added onViewCustomer prop
         { id: 'vehicles', label: 'Vehicles', icon: Car, render: () => <ManagementVehiclesTab searchTerm={searchTerm} onShowStatus={showStatus} onViewCustomer={onViewCustomer} onViewJob={onViewJob} onViewEstimate={onViewEstimate} onViewInvoice={onViewInvoice} onOpenPurchaseOrder={onOpenPurchaseOrder} />, permission: 'canManageVehicles' },
-        { id: 'invoices', label: 'Invoices', icon: FileText, render: () => <ManagementInvoicesTab searchTerm={searchTerm} onShowStatus={showStatus} onViewInvoice={onViewInvoice} />, permission: 'canViewFinancials' },
         { id: 'diagrams', label: 'Vehicle Diagrams', icon: CarFront, render: () => <ManagementDiagramsTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionDiagrams' },
         { id: 'inspectionTemplates', label: 'Inspection Templates', icon: ClipboardCheck, render: () => <ManagementInspectionTemplatesTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageInspectionTemplates' },
         { id: 'staff', label: 'Staff (Users)', icon: Users, render: () => <ManagementStaffTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageStaff' },

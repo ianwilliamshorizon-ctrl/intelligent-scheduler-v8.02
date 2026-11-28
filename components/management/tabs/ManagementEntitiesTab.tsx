@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useData } from '../../../core/state/DataContext';
-import { useApp } from '../../../core/state/AppContext';
-import { BusinessEntity, Job, Invoice } from '../../../types';
-import { PlusCircle, Upload, Building2, MapPin, Briefcase, FileText, Mail, RefreshCw, Trash2, Archive, Layout, Wrench } from 'lucide-react';
+import { BusinessEntity, Job } from '../../../types';
+import { PlusCircle, Building2, MapPin, Briefcase, FileText, Mail, Trash2, Archive, Layout, Wrench } from 'lucide-react';
 import EntityFormModal from '../../EntityFormModal';
 import { DocumentLayoutDesignerModal } from '../DocumentLayoutDesignerModal';
-import { useManagementTable } from '../hooks/useManagementTable';
-import { parseCsv, validateCsvData } from '../../../utils/csvUtils';
 import { toast } from 'react-toastify';
-import { generateJobId, generateInvoiceId } from '../../../core/utils/numberGenerators';
-import { splitJobIntoSegments, formatDate } from '../../../core/utils/dateUtils';
-import { isDuplicateJob, isDuplicateInvoice, normalizeVRM } from '../../../core/utils/deduplicationUtils';
-import { saveDocument, deleteDocument } from '../../../core/db';
+import { isDuplicateJob } from '../../../core/utils/deduplicationUtils';
+import { db, saveDocument, deleteDocument } from '../../../core/db';
+import { writeBatch, doc, collection } from 'firebase/firestore';
+import { parseAndPrepareJobImport } from '../../../utils/jobImportUtils';
+import { parseAndPrepareInvoiceImport } from '../../../utils/invoiceImportUtils';
 
 const isInvalidDate = (dateVal: any): boolean => {
     if (dateVal === null || dateVal === undefined || String(dateVal).trim() === '') {
@@ -38,12 +36,10 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         vehicles = [], 
         customers = [], 
         invoices = [], 
-        taxRates = [],
         saveRecord,
         setJobs,
-        setInvoices,
+        forceRefresh,
     } = useData();
-    const { refreshData } = useApp();
 
     // 2. Local State for UI Stability
     const [localEntities, setLocalEntities] = useState<BusinessEntity[]>(Array.isArray(businessEntities) ? businessEntities : []);
@@ -82,96 +78,59 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         const file = e.target.files?.[0];
         const entityId = importTargetEntityId;
         if (!file || !entityId) return;
-        onShowStatus('Processing jobs import...', 'info');
+        onShowStatus('Processing job card import...', 'info');
         try {
-            const data = await parseCsv(file);
-            const validation = validateCsvData(data, 'jobs', file.name);
-            if (!validation.valid) {
-                toast.error(validation.error);
-                onShowStatus(validation.error, 'error');
+            const result = await parseAndPrepareJobImport(file, jobs, customers, vehicles, 'Closed');
+            if (!result.valid) {
+                const errMsg = result.error || 'Invalid job card import file.';
+                toast.error(errMsg);
+                onShowStatus(errMsg, 'error');
                 return;
             }
-            const entity = localEntities.find(e => e.id === entityId);
-            const entityShortCode = entity?.shortCode || 'UNK';
-            
-            const importedJobs: Job[] = [];
-            let duplicateCount = 0;
-            let invalidCount = 0;
-            
-            for (const row of data) {
-                const reg = normalizeVRM(row.registration);
-                const vehicle = reg ? (vehicles || []).find(v => normalizeVRM(v.registration) === reg) : undefined;
-                const customer = (customers || []).find(c => 
-                    (vehicle && c.id === vehicle.customerId) || 
-                    (row.customerName && `${c.forename} ${c.surname}`.toLowerCase().includes(String(row.customerName).toLowerCase()))
-                );
-                
-                const tempJobId = row.id || generateJobId([...(jobs || []), ...importedJobs], entityShortCode);
-                const scheduledDate = row.scheduledDate || null;
-                const customerId = customer?.id || 'unknown_customer';
-                
-                if (customerId === 'unknown_customer' || isInvalidDate(scheduledDate)) {
-                    invalidCount++;
-                    continue;
-                }
-                
-                const job: Job = {
-                    id: tempJobId,
-                    entityId: entityId,
-                    vehicleId: vehicle?.id || 'unknown_vehicle',
-                    customerId: customerId,
-                    description: row.description || 'Imported Job',
-                    estimatedHours: Number(row.estimatedHours) || 1,
-                    scheduledDate: scheduledDate,
-                    status: row.status || 'Archived',
-                    createdAt: row.createdAt || new Date().toISOString(),
-                    segments: [],
-                    mileage: row.mileage ? Number(row.mileage) : undefined,
-                    keyNumber: row.keyNumber ? Number(row.keyNumber) : undefined
-                };
-                job.segments = splitJobIntoSegments(job);
-                
-                const isDuplicateInBatch = importedJobs.some(imported => isDuplicateJob(imported, job));
-                const isDuplicateInDb = (jobs || []).some(existing => isDuplicateJob(existing, job));
-                
-                if (isDuplicateInBatch || isDuplicateInDb) {
-                    duplicateCount++;
-                } else {
-                    importedJobs.push(job);
-                }
-            }
-            
-            for (const job of importedJobs) {
-                await saveDocument('brooks_jobs', job);
-            }
-            
-            if (importedJobs.length > 0) {
-                setJobs(prevJobs => [...prevJobs, ...importedJobs]);
-            }
-            
-            let feedbackMsg = `Imported ${importedJobs.length} new jobs successfully.`;
-            const extraDetails = [];
-            if (duplicateCount > 0) {
-                extraDetails.push(`${duplicateCount} duplicate(s) skipped`);
-            }
-            if (invalidCount > 0) {
-                extraDetails.push(`${invalidCount} invalid job(s) skipped (no customer or invalid date)`);
-            }
-            if (extraDetails.length > 0) {
-                feedbackMsg += ` (${extraDetails.join(', ')})`;
-            }
 
-            if (importedJobs.length > 0) {
-                onShowStatus(feedbackMsg, 'success');
-            } else {
-                onShowStatus(`No new jobs imported. ${duplicateCount > 0 ? `${duplicateCount} duplicate(s) skipped. ` : ''}${invalidCount > 0 ? `${invalidCount} invalid job(s) skipped.` : ''}`, 'info');
+            const jobsWithEntity = result.jobs.map((job) => ({
+                ...job,
+                entityId: job.entityId || entityId,
+            }));
+
+            const batchLimit = 400;
+            let currentBatch = writeBatch(db);
+            let batchCount = 0;
+
+            for (const job of jobsWithEntity) {
+                currentBatch.set(doc(collection(db, 'brooks_jobs'), job.id), job);
+                batchCount++;
+                if (batchCount >= batchLimit) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(db);
+                    batchCount = 0;
+                }
             }
-        } catch (err) { 
-            console.error(err); 
-            onShowStatus('Error importing jobs.', 'error'); 
+            if (batchCount > 0) await currentBatch.commit();
+
+            const details: string[] = [];
+            if (result.duplicateCount > 0) details.push(`${result.duplicateCount} duplicate(s) skipped`);
+            if (result.rejectedCount > 0) details.push(`${result.rejectedCount} invalid row(s) skipped`);
+            if (result.unmatchedLinksCount > 0) details.push(`${result.unmatchedLinksCount} unmatched Customer/Vehicle fallback(s)`);
+            const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+
+            if (jobsWithEntity.length > 0) {
+                await forceRefresh('brooks_jobs');
+                onShowStatus(`Imported ${jobsWithEntity.length} job card(s).${suffix}`, 'success');
+            } else {
+                onShowStatus(
+                    details.length > 0 ? `No new job cards imported.${suffix}` : 'No new job cards found.',
+                    'info'
+                );
+            }
+        } catch (err) {
+            console.error('Job card import failed:', err);
+            toast.error('Job card import failed. Check console for details.');
+            onShowStatus('Error importing job cards.', 'error');
+        } finally {
+            e.target.value = '';
+            setImportTargetEntityId(null);
         }
-        e.target.value = ''; 
-        setImportTargetEntityId(null);
     };
 
     const handleImportInvoices = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -180,69 +139,57 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
         if (!file || !entityId) return;
         onShowStatus('Processing invoices import...', 'info');
         try {
-            const data = await parseCsv(file);
-            const validation = validateCsvData(data, 'invoices', file.name);
-            if (!validation.valid) {
-                toast.error(validation.error);
-                onShowStatus(validation.error, 'error');
+            const result = await parseAndPrepareInvoiceImport(file, invoices, customers, vehicles);
+            if (!result.valid) {
+                const errMsg = result.error || 'Invalid invoice import file.';
+                toast.error(errMsg);
+                onShowStatus(errMsg, 'error');
                 return;
             }
-            const entity = localEntities.find(e => e.id === entityId);
-            const entityShortCode = entity?.shortCode || 'UNK';
-            
-            const importedInvoices: Invoice[] = [];
-            let duplicateCount = 0;
-            
-            for (const row of data) {
-                const reg = normalizeVRM(row.registration);
-                const vehicle = reg ? (vehicles || []).find(v => normalizeVRM(v.registration) === reg) : undefined;
-                const customer = (customers || []).find(c => (vehicle && c.id === vehicle.customerId) || (row.customerName && `${c.forename} ${c.surname}`.toLowerCase().includes(String(row.customerName).toLowerCase())));
-                
-                const tempInvoiceId = row.id || generateInvoiceId([...(invoices || []), ...importedInvoices], entityShortCode);
-                const total = Number(row.total) || 0; 
-                const net = total / 1.2;
-                const invoice: Invoice = {
-                    id: tempInvoiceId,
-                    entityId: entityId,
-                    customerId: customer?.id || 'unknown_customer',
-                    vehicleId: vehicle?.id || 'unknown_vehicle',
-                    issueDate: row.issueDate || formatDate(new Date()),
-                    dueDate: row.dueDate || formatDate(new Date()),
-                    status: row.status || 'Draft',
-                    lineItems: [{ id: crypto.randomUUID(), description: 'Imported Balance', quantity: 1, unitPrice: net, isLabor: false, taxCodeId: (taxRates || []).find(t=>t.code==='T1')?.id }],
-                    payments: [],
-                    grandTotal: total
-                };
-                
-                const isDuplicateInBatch = importedInvoices.some(imported => isDuplicateInvoice(imported, invoice));
-                const isDuplicateInDb = (invoices || []).some(existing => isDuplicateInvoice(existing, invoice));
-                
-                if (isDuplicateInBatch || isDuplicateInDb) {
-                    duplicateCount++;
-                } else {
-                    importedInvoices.push(invoice);
+
+            const invoicesWithEntity = result.invoices.map((inv) => ({
+                ...inv,
+                entityId: inv.entityId || entityId,
+            }));
+
+            const batchLimit = 400;
+            let currentBatch = writeBatch(db);
+            let batchCount = 0;
+
+            for (const inv of invoicesWithEntity) {
+                currentBatch.set(doc(collection(db, 'brooks_invoices'), inv.id), inv);
+                batchCount++;
+                if (batchCount >= batchLimit) {
+                    await currentBatch.commit();
+                    currentBatch = writeBatch(db);
+                    batchCount = 0;
                 }
             }
-            
-            for (const inv of importedInvoices) {
-                await saveDocument('brooks_invoices', inv);
-            }
-            
-            if (importedInvoices.length > 0) {
-                setInvoices(prevInvoices => [...prevInvoices, ...importedInvoices]);
-            }
-            
-            if (importedInvoices.length > 0) {
-                onShowStatus(`Imported ${importedInvoices.length} new invoices successfully.${duplicateCount > 0 ? ` (${duplicateCount} duplicate(s) skipped)` : ''}`, 'success');
+            if (batchCount > 0) await currentBatch.commit();
+
+            const details: string[] = [];
+            if (result.duplicateCount > 0) details.push(`${result.duplicateCount} duplicate(s) skipped`);
+            if (result.rejectedCount > 0) details.push(`${result.rejectedCount} invalid row(s) skipped`);
+            if (result.unmatchedLinksCount > 0) details.push(`${result.unmatchedLinksCount} unmatched Customer/Vehicle fallback(s)`);
+            const suffix = details.length > 0 ? ` (${details.join(', ')})` : '';
+
+            if (invoicesWithEntity.length > 0) {
+                await forceRefresh('brooks_invoices');
+                onShowStatus(`Imported ${invoicesWithEntity.length} invoice(s).${suffix}`, 'success');
             } else {
-                onShowStatus(`No new invoices imported. All ${duplicateCount} records were duplicates.`, 'info');
+                onShowStatus(
+                    details.length > 0 ? `No new invoices imported.${suffix}` : 'No new invoices found.',
+                    'info'
+                );
             }
-        } catch (err) { 
-            console.error(err); 
-            onShowStatus('Error importing invoices.', 'error'); 
+        } catch (err) {
+            console.error('Invoice import failed:', err);
+            toast.error('Invoice import failed. Check console for details.');
+            onShowStatus('Error importing invoices.', 'error');
+        } finally {
+            e.target.value = '';
+            setImportTargetEntityId(null);
         }
-        e.target.value = ''; 
-        setImportTargetEntityId(null);
     };
 
     const handleBulkAction = async (entityId: string, actionType: 'archive' | 'delete') => {
@@ -448,16 +395,18 @@ export const ManagementEntitiesTab: React.FC<ManagementEntitiesTabProps> = ({ on
 
                             {/* Data Imports */}
                             <div className="grid grid-cols-2 gap-2">
-                                <label className="flex flex-col items-center justify-center p-2.5 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all group">
+                                <label className="flex flex-col items-center justify-center p-2.5 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-all group" title="Import Job Cards (CSV or JSON)">
                                     <Briefcase size={15} className="text-gray-400 group-hover:text-blue-600 mb-0.5" />
                                     <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-blue-700">Import Jobs</span>
-                                    <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportJobs} />
+                                    <span className="text-[9px] text-gray-400">CSV / JSON</span>
+                                    <input type="file" accept=".csv,.json" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportJobs} />
                                 </label>
 
-                                <label className="flex flex-col items-center justify-center p-2.5 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all group">
+                                <label className="flex flex-col items-center justify-center p-2.5 border border-gray-100 bg-gray-50 rounded-xl cursor-pointer hover:bg-green-50 hover:border-green-200 transition-all group" title="Import Invoices (CSV or JSON)">
                                     <FileText size={15} className="text-gray-400 group-hover:text-green-600 mb-0.5" />
                                     <span className="text-[10px] font-black uppercase text-gray-500 group-hover:text-green-700">Import Invoices</span>
-                                    <input type="file" accept=".csv" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportInvoices} />
+                                    <span className="text-[9px] text-gray-400">CSV / JSON</span>
+                                    <input type="file" accept=".csv,.json" className="hidden" onClick={() => setImportTargetEntityId(e.id)} onChange={handleImportInvoices} />
                                 </label>
                             </div>
 
