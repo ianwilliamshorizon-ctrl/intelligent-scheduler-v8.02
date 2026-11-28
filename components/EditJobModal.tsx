@@ -1506,7 +1506,23 @@ const EditJobModal: React.FC<EditJobModalProps> = ({
                             )}
                             {activeTab === 'notes' && (
                                 <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
+                                    <div className="bg-indigo-50/40 border border-indigo-100 rounded-xl p-4 space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <h3 className="text-sm font-bold text-gray-800">Internal Job Notes</h3>
+                                            <span className="text-[11px] text-gray-500">Synced with Internal Notes</span>
+                                        </div>
+                                        <textarea
+                                            name="notes"
+                                            value={editableJob.notes || ''}
+                                            onChange={handleChange}
+                                            readOnly={isReadOnly}
+                                            rows={4}
+                                            className="w-full p-3 border border-gray-200 rounded-lg bg-white text-sm focus:ring-2 focus:ring-indigo-500 transition-all resize-y outline-none"
+                                            placeholder="Add internal job or legacy import notes..."
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-between items-center pt-2">
                                         <h3 className="text-lg font-bold text-gray-800">Internal Technician Notes</h3>
                                         <p className="text-xs text-gray-500 italic">Dictate your findings line by line for the report.</p>
                                     </div>
