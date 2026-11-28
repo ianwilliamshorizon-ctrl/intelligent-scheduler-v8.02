@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Brookspeed External Import Transformation Suite</title>
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --muted: #64748b;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
+      --success: #059669;
+      --warn: #d97706;
+      --danger: #dc2626;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    .container { max-width: 1440px; margin: 0 auto; padding: 24px; }
+    header {
+      display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center;
+      gap: 16px; margin-bottom: 20px;
+    }
+    h1 { margin: 0; font-size: 1.5rem; }
+    .subtitle { color: var(--muted); font-size: 0.9rem; margin-top: 2px; }
+    .badge {
+      display: inline-block; padding: 4px 10px; border-radius: 999px;
+      font-size: 0.75rem; font-weight: 600; background: #e0e7ff; color: #3730a3;
+    }
+    .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 10px; }
+    .tab-btn {
+      padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--card); cursor: pointer; font-weight: 600; font-size: 0.875rem; color: var(--text);
+    }
+    .tab-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .grid { display: grid; grid-template-columns: 360px 1fr; gap: 20px; align-items: start; }
+    @media (max-width: 960px) { .grid { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      padding: 18px; box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .card h2 { margin: 0 0 12px; font-size: 1rem; }
+    .dropzone {
+      border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px; text-align: center;
+      cursor: pointer; transition: 0.15s; background: #f8fafc; margin-bottom: 12px;
+    }
+    .dropzone:hover, .dropzone.dragover { border-color: var(--primary); background: #eef2ff; }
+    .dropzone small { display: block; color: var(--muted); margin-top: 4px; }
+    label { display: block; font-size: 0.8rem; font-weight: 600; color: #334155; margin: 10px 0 4px; }
+    input[type="text"], input[type="number"], select {
+      width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+      font-size: 0.875rem; background: #fff;
+    }
+    .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      padding: 9px 14px; border-radius: 8px; border: 1px solid transparent;
+      font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.15s;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-outline { background: #fff; border-color: var(--border); color: var(--text); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+    .stat { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+    .stat .val { font-size: 1.35rem; font-weight: 700; }
+    .stat .lbl { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+    .table-wrap { overflow: auto; max-height: 540px; border: 1px solid var(--border); border-radius: 10px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: #f1f5f9; position: sticky; top: 0; font-weight: 700; z-index: 1; }
+    .pill {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700;
+    }
+    .pill-Paid, .pill-Retail { background: #dcfce7; color: #166534; }
+    .pill-Part, .pill-Trade { background: #fef3c7; color: #92400e; }
+    .pill-Overdue { background: #fee2e2; color: #991b1b; }
+    .pill-Sent { background: #dbeafe; color: #1e40af; }
+    .pill-Draft { background: #e2e8f0; color: #334155; }
+    .alert { padding: 10px 12px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 12px; }
+    .alert-danger { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .alert-warn { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    .hidden { display: none; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Brookspeed External Import Transformation Suite</h1>
+        <div class="subtitle">Standalone offline mapper &amp; validator — transforms legacy Customers, Vehicles, and Invoices CSVs into Brookspeed format.</div>
+      </div>
+      <span class="badge">External Tool • v1.1</span>
+    </header>
+
+    <div class="tabs">
+      <button class="tab-btn active" type="button" data-tab="invoices">Invoices</button>
+      <button class="tab-btn" type="button" data-tab="customers">Customers</button>
+      <button class="tab-btn" type="button" data-tab="vehicles">Vehicles</button>
+    </div>
+
+    <div class="grid">
+      <aside class="card">
+        <h2>1. Source Files</h2>
+        <div id="csvDropzone" class="dropzone">
+          <strong id="csvDropLabel">Drop Legacy Invoice CSV here</strong>
+          <small id="csvFileName">or click to browse (.csv)</small>
+          <input id="csvFileInput" type="file" accept=".csv,text/csv" class="hidden" />
+        </div>
+
+        <div id="backupDropzone" class="dropzone" style="padding: 14px;">
+          <strong>Optional: Brookspeed Backup JSON</strong>
+          <small id="backupFileName">Drop backup .json to auto-match customerId &amp; vehicleId</small>
+          <input id="backupFileInput" type="file" accept=".json,application/json" class="hidden" />
+        </div>
+
+        <h2 style="margin-top: 18px;">2. Mapping Options</h2>
+        <div id="invoiceOptions">
+          <div class="row-2">
+            <div>
+              <label for="vatRate">Default VAT (%)</label>
+              <input id="vatRate" type="number" value="20" min="0" max="100" step="0.5" />
+            </div>
+            <div>
+              <label for="termsDays">Payment Terms (days)</label>
+              <input id="termsDays" type="number" value="30" min="0" max="365" />
+            </div>
+          </div>
+          <div class="row-2">
+            <div>
+              <label for="idPrefix">Invoice ID Prefix</label>
+              <input id="idPrefix" type="text" placeholder="e.g. INV- (optional)" />
+            </div>
+            <div>
+              <label for="entityId">Entity ID (optional)</label>
+              <input id="entityId" type="text" placeholder="e.g. ent_porsche" />
+            </div>
+          </div>
+        </div>
+
+        <div id="customerOptions" class="hidden">
+          <label for="defaultCustomerCategory">Default Category</label>
+          <select id="defaultCustomerCategory">
+            <option value="Retail">Retail</option>
+            <option value="Trade">Trade</option>
+          </select>
+        </div>
+
+        <div id="vehicleOptions" class="hidden">
+          <label for="defaultVehicleColour">Default Colour (when blank)</label>
+          <input id="defaultVehicleColour" type="text" value="Silver" />
+        </div>
+
+        <div class="actions">
+          <button id="downloadJsonBtn" class="btn btn-primary" disabled>Download Restore JSON</button>
+          <button id="downloadCsvBtn" class="btn btn-success" disabled>Download Clean CSV</button>
+          <button id="downloadIssuesBtn" class="btn btn-outline" disabled>Download Issues CSV</button>
+        </div>
+      </aside>
+
+      <main class="card">
+        <div class="stats">
+          <div class="stat"><div class="val" id="statTotal">0</div><div class="lbl">Source Rows</div></div>
+          <div class="stat"><div class="val" id="statValid" style="color:var(--success)">0</div><div class="lbl">Transformed</div></div>
+          <div class="stat"><div class="val" id="statRejected" style="color:var(--danger)">0</div><div class="lbl">Rejected</div></div>
+          <div class="stat"><div class="val" id="statUnmatched" style="color:var(--warn)">0</div><div class="lbl" id="statUnmatchedLbl">Unmatched Links</div></div>
+        </div>
+
+        <div id="rejectedBanner" class="alert alert-danger hidden"></div>
+        <div id="unmatchedBanner" class="alert alert-warn hidden"></div>
+
+        <div class="table-wrap">
+          <table>
+            <thead id="previewHead"></thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function parseCsv(text) {
+      const rows = [];
+      let row = [], field = '', inQuotes = false;
+      const cleanText = text.replace(/^\uFEFF/, '');
+      for (let i = 0; i < cleanText.length; i++) {
+        const ch = cleanText[i], next = cleanText[i + 1];
+        if (inQuotes) {
+          if (ch === '"' && next === '"') { field += '"'; i++; }
+          else if (ch === '"') { inQuotes = false; }
+          else { field += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; }
+          else if (ch === ',') { row.push(field); field = ''; }
+          else if (ch === '\r' && next === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; }
+          else if (ch === '\n' || ch === '\r') { row.push(field); rows.push(row); row = []; field = ''; }
+          else { field += ch; }
+        }
+      }
+      if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+      if (rows.length === 0) return { headers: [], records: [] };
+      const headers = rows[0].map(h => h.trim());
+      const records = [];
+      for (let r = 1; r < rows.length; r++) {
+        const values = rows[r];
+        if (values.length === 1 && values[0].trim() === '') continue;
+        const obj = { __rowNumber: r + 1 };
+        headers.forEach((h, idx) => { obj[h] = (values[idx] ?? '').trim(); });
+        records.push(obj);
+      }
+      return { headers, records };
+    }
+
+    function pick(row, candidates) {
+      const lowerMap = new Map(Object.keys(row).map(k => [k.toLowerCase(), row[k]]));
+      for (const c of candidates) {
+        const val = lowerMap.get(c.toLowerCase());
+        if (val !== undefined && String(val).trim() !== '') return String(val).trim();
+      }
+      return '';
+    }
+
+    function parseUkDateToIso(dateStr) {
+      const trimmed = (dateStr || '').trim();
+      if (!trimmed) return null;
+      const m = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/.exec(trimmed);
+      if (m) {
+        const day = Number(m[1]), month = Number(m[2]), year = Number(m[3]);
+        const dt = new Date(Date.UTC(year, month - 1, day));
+        if (dt.getUTCFullYear() === year && dt.getUTCMonth() === month - 1 && dt.getUTCDate() === day) {
+          return `${String(year).padStart(4,'0')}-${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+        }
+        return null;
+      }
+      return /^\d{4}-\d{2}-\d{2}$/.test(trimmed) ? trimmed : null;
+    }
+
+    function addDaysIso(isoDate, days) {
+      const [y, m, d] = isoDate.split('-').map(Number);
+      const dt = new Date(Date.UTC(y, m - 1, d + days));
+      return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2,'0')}-${String(dt.getUTCDate()).padStart(2,'0')}`;
+    }
+
+    function round2(n) { return Math.round((n + Number.EPSILON) * 100) / 100; }
+    function normalizeReg(reg) { return (reg || '').replace(/\s+/g, '').toUpperCase(); }
+    function escapeCsvCell(val) {
+      const s = val === null || val === undefined ? '' : String(val);
+      return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+
+    function buildLookupMaps(backupJson) {
+      const customersByKey = new Map(), vehiclesByReg = new Map(), vehiclesByVin = new Map();
+      if (!backupJson) return { customersByKey, vehiclesByReg, vehiclesByVin };
+      const data = backupJson.data || backupJson;
+      for (const c of (Array.isArray(data.brooks_customers) ? data.brooks_customers : [])) {
+        if (c.id) customersByKey.set(String(c.id).trim().toUpperCase(), c.id);
+        if (c.accountCode) customersByKey.set(String(c.accountCode).trim().toUpperCase(), c.id);
+        if (c.legacyId) customersByKey.set(String(c.legacyId).trim().toUpperCase(), c.id);
+        const fullName = [c.forename, c.surname].filter(Boolean).join(' ').trim().toUpperCase();
+        if (fullName) customersByKey.set(fullName, c.id);
+        if (c.companyName) customersByKey.set(String(c.companyName).trim().toUpperCase(), c.id);
+      }
+      for (const v of (Array.isArray(data.brooks_vehicles) ? data.brooks_vehicles : [])) {
+        const reg = normalizeReg(v.registration);
+        if (reg) vehiclesByReg.set(reg, v.id);
+        const vin = (v.vin || '').trim().toUpperCase();
+        if (vin) vehiclesByVin.set(vin, v.id);
+      }
+      return { customersByKey, vehiclesByReg, vehiclesByVin };
+    }
+
+    // --- 1. INVOICES ---
+    function transformInvoices(records, opts) {
+      const { vatRate, termsDays, entityId, idPrefix, backupJson } = opts;
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const { customersByKey, vehiclesByReg, vehiclesByVin } = buildLookupMaps(backupJson);
+      const items = [], rejected = [], unmatched = [];
+
+      for (const row of records) {
+        const rowNum = row.__rowNumber;
+        const rawInvoiceNo = pick(row, ['Invoice No', 'Invoice Number', 'id']);
+        const issueDate = parseUkDateToIso(pick(row, ['Invoice Date', 'Issue Date', 'issueDate']));
+        if (!rawInvoiceNo) { rejected.push({ rowNumber: rowNum, key: '', reason: 'Missing Invoice No' }); continue; }
+        if (!issueDate) { rejected.push({ rowNumber: rowNum, key: rawInvoiceNo, reason: `Invalid Invoice Date` }); continue; }
+
+        const totalGross = Number(pick(row, ['Invoice Total', 'Grand Total', 'grandTotal', 'Total']) || 0);
+        const outstandingRaw = pick(row, ['Outstanding']) === '' ? totalGross : Number(pick(row, ['Outstanding']));
+        if (Number.isNaN(totalGross) || Number.isNaN(outstandingRaw)) {
+          rejected.push({ rowNumber: rowNum, key: rawInvoiceNo, reason: 'Non-numeric Invoice Total or Outstanding' });
+          continue;
+        }
+
+        const dueDate = addDaysIso(issueDate, termsDays);
+        const paidFlag = ['1', 'true', 'yes'].includes(pick(row, ['Paid']).toLowerCase());
+        const outstanding = Math.max(0, round2(outstandingRaw));
+        const paidAmount = round2(Math.max(0, totalGross - outstanding));
+
+        let status = 'Sent';
+        if (totalGross === 0 && !paidFlag) status = 'Draft';
+        else if (paidFlag || outstanding <= 0.005) status = 'Paid';
+        else if (paidAmount > 0.005) status = 'Part Paid';
+        else if (dueDate < todayIso) status = 'Overdue';
+
+        const legacyCust = pick(row, ['Customer', 'Account Code', 'customerId']);
+        const custName = pick(row, ['Customer Name', 'customerName']);
+        const matchedCustomerId = customersByKey.get(legacyCust.toUpperCase()) || customersByKey.get(custName.toUpperCase()) || null;
+
+        const regNorm = normalizeReg(pick(row, ['Vehicle', 'Registration', 'Reg', 'registration']));
+        const vinNorm = pick(row, ['VIN', 'vin']).toUpperCase();
+        const matchedVehicleId = (regNorm && vehiclesByReg.get(regNorm)) || (vinNorm && vehiclesByVin.get(vinNorm)) || null;
+
+        if (backupJson && (!matchedCustomerId || !matchedVehicleId)) {
+          unmatched.push({
+            rowNumber: rowNum,
+            key: rawInvoiceNo,
+            reason: `${!matchedCustomerId ? 'Unmatched Customer (' + legacyCust + ')' : ''}${!matchedCustomerId && !matchedVehicleId ? '; ' : ''}${!matchedVehicleId ? 'Unmatched Vehicle (' + regNorm + ')' : ''}`
+          });
+        }
+
+        const effectiveVatRate = totalGross === 0 ? 0 : vatRate;
+        const totalNet = effectiveVatRate > 0 ? round2(totalGross / (1 + effectiveVatRate / 100)) : round2(totalGross);
+        const totalVat = round2(totalGross - totalNet);
+        const jobDetails = pick(row, ['Job Details', 'notes', 'Description']).replace(/\s+/g, ' ').trim();
+        const invoiceId = `${idPrefix}${rawInvoiceNo}`;
+        const jobId = pick(row, ['Our Job No', 'Job No', 'jobId']);
+
+        items.push({
+          id: invoiceId,
+          customerId: matchedCustomerId || legacyCust || custName || 'UNKNOWN_CUSTOMER',
+          vehicleId: matchedVehicleId || regNorm || vinNorm || 'UNKNOWN_VEHICLE',
+          issueDate,
+          dueDate,
+          status,
+          lineItems: [{
+            id: `${invoiceId}-line-1`,
+            description: jobDetails || `Legacy Invoice #${rawInvoiceNo}`,
+            quantity: 1,
+            unitPrice: totalNet,
+            unitCost: 0,
+            isLabor: false,
+            vatRate: effectiveVatRate,
+          }],
+          payments: paidAmount > 0.005 ? [{ amount: paidAmount, date: issueDate, method: 'Other', notes: 'Imported historical payment' }] : [],
+          totalNet,
+          totalVat,
+          totalAmount: round2(totalGross),
+          grandTotal: round2(totalGross),
+          ...(jobDetails ? { notes: jobDetails } : {}),
+          ...(entityId ? { entityId } : {}),
+          ...(jobId ? { jobId } : {}),
+        });
+      }
+      return { items, rejected, unmatched };
+    }
+
+    // --- 2. CUSTOMERS (GDS Legacy Mapping) ---
+    function splitTitleAndName(fullName, isBusiness) {
+      const result = { title: '', forename: '', surname: '', companyName: '' };
+      const name = (fullName || '').trim();
+      if (isBusiness) {
+        result.companyName = name;
+        return result;
+      }
+      if (!name) return result;
+      const titles = ['mr', 'mrs', 'ms', 'miss', 'dr', 'prof'];
+      const parts = name.split(/\s+/).map(p => p.trim()).filter(Boolean);
+      if (parts.length > 0 && titles.includes(parts[0].toLowerCase().replace(/\./g, ''))) {
+        result.title = parts.shift();
+      }
+      if (parts.length >= 2) {
+        result.surname = parts.pop();
+        result.forename = parts.join(' ');
+      } else if (parts.length === 1) {
+        result.forename = parts[0];
+      }
+      return result;
+    }
+
+    function parseUkAddress(addressString) {
+      const result = { addressLine1: '', addressLine2: '', city: '', county: '', postcode: '' };
+      let clean = (addressString || '').trim().replace(/"/g, '');
+      if (!clean) return result;
+      const postcodeMatch = clean.match(/([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})/i);
+      if (postcodeMatch) {
+        result.postcode = postcodeMatch[1].trim().toUpperCase();
+        clean = clean.replace(postcodeMatch[0], '').trim();
+      }
+      const parts = clean.split(',').map(p => p.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        result.city = parts.pop();
+        if (parts.length === 1) {
+          result.addressLine1 = parts[0];
+        } else if (parts.length > 1) {
+          result.addressLine2 = parts.pop();
+          result.addressLine1 = parts.join(', ');
+        }
+      }
+      result.addressLine1 = result.addressLine1.replace(/,$/, '').trim();
+      result.addressLine2 = result.addressLine2.replace(/,$/, '').trim();
+      result.city = result.city.replace(/,$/, '').trim();
+      return result;
+    }
+
+    function transformCustomers(records, opts) {
+      const { defaultCategory } = opts;
+      const items = [], rejected = [], seenIds = new Set();
+
+      for (const row of records) {
+        const rowNum = row.__rowNumber;
+        const code = pick(row, ['Customer', 'Account Code', 'Account No', 'Code', 'id']);
+        const category = pick(row, ['Category', 'category']) || defaultCategory;
+        const isBusiness = category.trim() === 'Business';
+        const rawName = pick(row, ['Name', 'Customer Name', 'Full Name', 'Contact Name']);
+        const explicitCompany = pick(row, ['Company', 'Company Name', 'companyName', 'Business Name']);
+        let forename = pick(row, ['Forename', 'First Name', 'first_name', 'forename']);
+        let surname = pick(row, ['Surname', 'Last Name', 'last_name', 'surname']);
+        let title = pick(row, ['Title', 'title']);
+        let companyName = explicitCompany;
+
+        if (!forename && !surname && rawName) {
+          const parsed = splitTitleAndName(rawName, isBusiness);
+          title = title || parsed.title;
+          forename = parsed.forename;
+          surname = parsed.surname;
+          companyName = companyName || parsed.companyName;
+        }
+
+        const email = pick(row, ['EMail', 'Email', 'Email Address', 'E-mail', 'email']);
+        const phone = pick(row, ['Telephone', 'Phone', 'Phone Number', 'Tel', 'phone']);
+        const mobile = pick(row, ['Mobile', 'Mobile Number', 'mobile']);
+
+        if (!forename && !surname && !companyName && !email && !phone && !mobile) {
+          rejected.push({ rowNumber: rowNum, key: code, reason: 'Missing Name, Company, Email, and Phone' });
+          continue;
+        }
+
+        const id = code || `cust_${rowNum}`;
+        const idKey = id.toUpperCase();
+        if (seenIds.has(idKey)) {
+          rejected.push({ rowNumber: rowNum, key: id, reason: 'Duplicate Customer ID in file' });
+          continue;
+        }
+        seenIds.add(idKey);
+
+        const rawAddress = pick(row, ['Address']);
+        const parsedAddr = rawAddress ? parseUkAddress(rawAddress) : { addressLine1: '', addressLine2: '', city: '', county: '', postcode: '' };
+        const addressLine1 = pick(row, ['Address 1', 'Address Line 1', 'AddressLine1', 'Street']) || parsedAddr.addressLine1;
+        const addressLine2 = pick(row, ['Address 2', 'Address Line 2', 'AddressLine2']) || parsedAddr.addressLine2;
+        const city = pick(row, ['City', 'Town', 'city']) || parsedAddr.city;
+        const county = pick(row, ['County', 'county']) || parsedAddr.county;
+        const postcode = (pick(row, ['Postcode', 'Post Code', 'Zip', 'postcode']) || parsedAddr.postcode).toUpperCase();
+
+        const createdDate = parseUkDateToIso(pick(row, ['Created Date', 'createdDate']).split(' ')[0]) || '';
+        const lastInvoicedDate = parseUkDateToIso(pick(row, ['Last Invoiced', 'lastInvoicedDate']).split(' ')[0]) || '';
+        const isCashCustomer = pick(row, ['Cash', 'isCashCustomer']) === '1' || pick(row, ['isCashCustomer']).toLowerCase() === 'true';
+
+        items.push({
+          id,
+          isBusinessCustomer: isBusiness ? 'True' : 'False',
+          companyName: companyName || '',
+          title: title || '',
+          forename: forename || '',
+          surname: surname || '',
+          addressLine1,
+          addressLine2,
+          city,
+          county,
+          postcode,
+          phone,
+          mobile,
+          email,
+          category,
+          isCashCustomer: isCashCustomer ? 'True' : 'False',
+          createdDate,
+          gdprRequested: pick(row, ['GDPR Requested', 'gdprRequested']),
+          gdprResponse: pick(row, ['Response', 'gdprResponse']),
+          lastInvoicedDate,
+          marketingConsent: 'False',
+        });
+      }
+      return { items, rejected, unmatched: [] };
+    }
+
+    // --- 3. VEHICLES (GDS Legacy Mapping) ---
+    function transformVehicles(records, opts) {
+      const { defaultColour, backupJson } = opts;
+      const { customersByKey } = buildLookupMaps(backupJson);
+      const items = [], rejected = [], unmatched = [], seenKeys = new Set();
+
+      for (let idx = 0; idx < records.length; idx++) {
+        const row = records[idx];
+        const rowNum = row.__rowNumber;
+        const reg = normalizeReg(pick(row, ['Vehicle', 'Registration', 'Reg', 'VRM', 'Plate', 'registration']));
+        const vin = pick(row, ['VIN', 'Chassis', 'Chassis Number', 'vin']).toUpperCase();
+
+        if (!reg && vin.length < 6) {
+          rejected.push({ rowNumber: rowNum, key: '', reason: 'Missing Registration (VRM) and valid VIN' });
+          continue;
+        }
+
+        const dedupeKey = reg || vin;
+        if (seenKeys.has(dedupeKey)) {
+          rejected.push({ rowNumber: rowNum, key: dedupeKey, reason: 'Duplicate Vehicle in file' });
+          continue;
+        }
+        seenKeys.add(dedupeKey);
+
+        let make = pick(row, ['Make', 'Vehicle Make', 'make']);
+        let model = pick(row, ['Model', 'Vehicle Model', 'model']);
+        const makeModel = pick(row, ['Make and Model', 'Make/Model', 'Description']);
+        if (!make && makeModel) {
+          const parts = makeModel.trim().split(/\s+/);
+          make = parts[0] || 'Unknown';
+          model = parts.slice(1).join(' ') || 'Unknown';
+        }
+
+        const legacyCust = pick(row, ['Customer', 'Account Code', 'Customer ID', 'customerId']);
+        const custName = pick(row, ['Customer Name', 'Owner', 'Owner Name', 'customerName']);
+        const matchedCustomerId = customersByKey.get(legacyCust.toUpperCase()) || customersByKey.get(custName.toUpperCase()) || null;
+
+        if (backupJson && !matchedCustomerId) {
+          unmatched.push({ rowNumber: rowNum, key: dedupeKey, reason: `Unmatched Customer (${legacyCust || custName || 'blank'})` });
+        }
+
+        items.push({
+          id: `veh_${idx + 1}`,
+          customerId: matchedCustomerId || legacyCust || custName || '',
+          registration: reg,
+          make: make || '',
+          model: model || '',
+          vin,
+          cc: pick(row, ['CC', 'Engine Size', 'cc']),
+          engineNumber: pick(row, ['Engine No', 'Engine Number', 'engineNumber']),
+          fuelType: pick(row, ['Fuel Type', 'Fuel', 'fuelType']),
+          colour: pick(row, ['Colour', 'Color', 'Paint', 'colour']) || defaultColour,
+          nextServiceDate: parseUkDateToIso(pick(row, ['Next Service Due', 'Service Due', 'nextServiceDate'])) || '',
+          nextMotDate: parseUkDateToIso(pick(row, ['Next MOT Due', 'MOT Due', 'MOT Expiry', 'nextMotDate'])) || '',
+          winterCheckDate: parseUkDateToIso(pick(row, ['Winter Check', 'winterCheckDate'])) || '',
+          fleetNumber: pick(row, ['Fleet No', 'Fleet Number', 'fleetNumber']),
+          manufactureDate: parseUkDateToIso(pick(row, ['Date of Manufacture', 'Manufacture Date', 'manufactureDate'])) || '',
+          covid19MotExemption: pick(row, ['COVID19 MOT Exemption', 'covid19MotExemption']),
+          transmissionType: pick(row, ['Transmission', 'Transmission Type', 'transmissionType']),
+          previousRegistrations: '',
+          images: '',
+        });
+      }
+      return { items, rejected, unmatched };
+    }
+
+    // --- UI STATE & RENDERING ---
+    let activeTab = 'invoices';
+    let currentRecords = null;
+    let currentBackupJson = null;
+    let currentResult = null;
+    let currentSourceName = 'export';
+
+    const TAB_META = {
+      invoices: {
+        dropLabel: 'Drop Legacy Invoice CSV here',
+        unmatchedLbl: 'Unmatched Links',
+        collectionKey: 'brooks_invoices',
+        headers: ['Invoice ID', 'Issue / Due', 'Status', 'Customer ID', 'Vehicle ID', 'Job ID', 'Net', 'VAT', 'Gross', 'Paid', 'Notes'],
+        csvHeaders: ['id','customerId','vehicleId','jobId','entityId','issueDate','dueDate','status','totalNet','totalVat','grandTotal','paidAmount','notes'],
+      },
+      customers: {
+        dropLabel: 'Drop Legacy Customers CSV here',
+        unmatchedLbl: 'Duplicate / Skipped',
+        collectionKey: 'brooks_customers',
+        headers: ['ID', 'Title', 'Forename', 'Surname', 'Company', 'Category', 'Email', 'Phone / Mobile', 'Postcode', 'Address'],
+        csvHeaders: ['id','isBusinessCustomer','companyName','title','forename','surname','addressLine1','addressLine2','city','county','postcode','phone','mobile','email','category','isCashCustomer','createdDate','gdprRequested','gdprResponse','lastInvoicedDate','marketingConsent'],
+      },
+      vehicles: {
+        dropLabel: 'Drop Legacy Vehicles CSV here',
+        unmatchedLbl: 'Unmatched Owners',
+        collectionKey: 'brooks_vehicles',
+        headers: ['Registration', 'Make', 'Model', 'VIN', 'Colour', 'Customer ID', 'Fuel', 'CC', 'MOT Due'],
+        csvHeaders: ['id','customerId','registration','make','model','vin','cc','engineNumber','fuelType','colour','nextServiceDate','nextMotDate','winterCheckDate','fleetNumber','manufactureDate','covid19MotExemption','transmissionType','previousRegistrations','images'],
+      }
+    };
+
+    function switchTab(tab) {
+      activeTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.getElementById('csvDropLabel').textContent = TAB_META[tab].dropLabel;
+      document.getElementById('statUnmatchedLbl').textContent = TAB_META[tab].unmatchedLbl;
+      document.getElementById('invoiceOptions').classList.toggle('hidden', tab !== 'invoices');
+      document.getElementById('customerOptions').classList.toggle('hidden', tab !== 'customers');
+      document.getElementById('vehicleOptions').classList.toggle('hidden', tab !== 'vehicles');
+      currentRecords = null;
+      currentResult = null;
+      document.getElementById('csvFileName').textContent = 'or click to browse (.csv)';
+      renderEmpty();
+    }
+
+    function renderEmpty() {
+      const meta = TAB_META[activeTab];
+      document.getElementById('previewHead').innerHTML = `<tr>${meta.headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+      document.getElementById('previewBody').innerHTML = `<tr><td colspan="${meta.headers.length}" style="text-align:center; color:var(--muted); padding: 36px;">Upload a CSV file on the left to preview transformed ${activeTab} records.</td></tr>`;
+      ['statTotal', 'statValid', 'statRejected', 'statUnmatched'].forEach(id => document.getElementById(id).textContent = '0');
+      document.getElementById('rejectedBanner').classList.add('hidden');
+      document.getElementById('unmatchedBanner').classList.add('hidden');
+      document.getElementById('downloadJsonBtn').disabled = true;
+      document.getElementById('downloadCsvBtn').disabled = true;
+      document.getElementById('downloadIssuesBtn').disabled = true;
+    }
+
+    function runTransform() {
+      if (!currentRecords) return;
+      const meta = TAB_META[activeTab];
+      document.getElementById('previewHead').innerHTML = `<tr>${meta.headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+
+      if (activeTab === 'invoices') {
+        currentResult = transformInvoices(currentRecords, {
+          vatRate: Number(document.getElementById('vatRate').value || 20),
+          termsDays: Number(document.getElementById('termsDays').value || 30),
+          idPrefix: document.getElementById('idPrefix').value.trim(),
+          entityId: document.getElementById('entityId').value.trim(),
+          backupJson: currentBackupJson,
+        });
+      } else if (activeTab === 'customers') {
+        currentResult = transformCustomers(currentRecords, {
+          defaultCategory: document.getElementById('defaultCustomerCategory').value,
+        });
+      } else {
+        currentResult = transformVehicles(currentRecords, {
+          defaultColour: document.getElementById('defaultVehicleColour').value.trim() || 'Silver',
+          backupJson: currentBackupJson,
+        });
+      }
+
+      document.getElementById('statTotal').textContent = currentRecords.length;
+      document.getElementById('statValid').textContent = currentResult.items.length;
+      document.getElementById('statRejected').textContent = currentResult.rejected.length;
+      document.getElementById('statUnmatched').textContent = currentResult.unmatched.length;
+
+      const rejEl = document.getElementById('rejectedBanner');
+      if (currentResult.rejected.length > 0) {
+        rejEl.classList.remove('hidden');
+        rejEl.textContent = `${currentResult.rejected.length} row(s) rejected: ` + currentResult.rejected.slice(0, 3).map(r => `Row ${r.rowNumber} (${r.reason})`).join('; ');
+      } else { rejEl.classList.add('hidden'); }
+
+      const unmEl = document.getElementById('unmatchedBanner');
+      if (currentResult.unmatched.length > 0) {
+        unmEl.classList.remove('hidden');
+        unmEl.textContent = `${currentResult.unmatched.length} record(s) had unmatched links against the backup JSON (kept legacy codes as fallback).`;
+      } else { unmEl.classList.add('hidden'); }
+
+      const tbody = document.getElementById('previewBody');
+      tbody.innerHTML = '';
+      for (const item of currentResult.items.slice(0, 250)) {
+        const tr = document.createElement('tr');
+        if (activeTab === 'invoices') {
+          const paid = round2((item.payments || []).reduce((s, p) => s + (p.amount || 0), 0));
+          const pillCls = item.status === 'Part Paid' ? 'pill-Part' : `pill-${item.status}`;
+          tr.innerHTML = `
+            <td class="mono"><strong>${item.id}</strong></td>
+            <td class="mono">${item.issueDate}<br><span style="color:var(--muted)">due ${item.dueDate}</span></td>
+            <td><span class="pill ${pillCls}">${item.status}</span></td>
+            <td class="mono">${item.customerId}</td>
+            <td class="mono">${item.vehicleId}</td>
+            <td class="mono">${item.jobId || '—'}</td>
+            <td class="mono">£${item.totalNet.toFixed(2)}</td>
+            <td class="mono">£${item.totalVat.toFixed(2)}</td>
+            <td class="mono"><strong>£${item.grandTotal.toFixed(2)}</strong></td>
+            <td class="mono">£${paid.toFixed(2)}</td>
+            <td style="max-width:260px">${(item.notes || '').slice(0, 100)}</td>
+          `;
+        } else if (activeTab === 'customers') {
+          tr.innerHTML = `
+            <td class="mono"><strong>${item.id}</strong></td>
+            <td>${item.title || '—'}</td>
+            <td>${item.forename}</td>
+            <td>${item.surname}</td>
+            <td>${item.companyName || '—'}</td>
+            <td><span class="pill pill-${item.category}">${item.category}</span></td>
+            <td>${item.email || '—'}</td>
+            <td class="mono">${[item.phone, item.mobile].filter(Boolean).join(' / ') || '—'}</td>
+            <td class="mono">${item.postcode || '—'}</td>
+            <td>${[item.addressLine1, item.city].filter(Boolean).join(', ') || '—'}</td>
+          `;
+        } else {
+          tr.innerHTML = `
+            <td class="mono"><strong>${item.registration || '—'}</strong></td>
+            <td>${item.make}</td>
+            <td>${item.model}</td>
+            <td class="mono">${item.vin || '—'}</td>
+            <td>${item.colour}</td>
+            <td class="mono">${item.customerId}</td>
+            <td>${item.fuelType || '—'}</td>
+            <td class="mono">${item.cc || '—'}</td>
+            <td class="mono">${item.nextMotDate || '—'}</td>
+          `;
+        }
+        tbody.appendChild(tr);
+      }
+
+      document.getElementById('downloadJsonBtn').disabled = currentResult.items.length === 0;
+      document.getElementById('downloadCsvBtn').disabled = currentResult.items.length === 0;
+      document.getElementById('downloadIssuesBtn').disabled = (currentResult.rejected.length + currentResult.unmatched.length) === 0;
+    }
+
+    function wireDropzone(dropId, inputId, onFile) {
+      const dz = document.getElementById(dropId), inp = document.getElementById(inputId);
+      dz.addEventListener('click', () => inp.click());
+      dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+      dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+      dz.addEventListener('drop', e => {
+        e.preventDefault(); dz.classList.remove('dragover');
+        if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+      });
+      inp.addEventListener('change', e => { if (e.target.files[0]) onFile(e.target.files[0]); });
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    });
+
+    wireDropzone('csvDropzone', 'csvFileInput', async file => {
+      currentSourceName = file.name.replace(/\.csv$/i, '');
+      document.getElementById('csvFileName').textContent = file.name;
+      currentRecords = parseCsv(await file.text()).records;
+      runTransform();
+    });
+
+    wireDropzone('backupDropzone', 'backupFileInput', async file => {
+      document.getElementById('backupFileName').textContent = file.name;
+      currentBackupJson = JSON.parse(await file.text());
+      runTransform();
+    });
+
+    ['vatRate', 'termsDays', 'idPrefix', 'entityId', 'defaultCustomerCategory', 'defaultVehicleColour'].forEach(id => {
+      document.getElementById(id).addEventListener('input', runTransform);
+      document.getElementById(id).addEventListener('change', runTransform);
+    });
+
+    function triggerDownload(filename, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+      const key = TAB_META[activeTab].collectionKey;
+      const payload = {
+        meta: { sourceFile: currentSourceName + '.csv', generatedAt: new Date().toISOString(), count: currentResult.items.length },
+        data: { [key]: currentResult.items }
+      };
+      triggerDownload(`${currentSourceName}.${key}.json`, JSON.stringify(payload, null, 2), 'application/json');
+    });
+
+    document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+      const headers = TAB_META[activeTab].csvHeaders;
+      const lines = [headers.join(',')];
+      for (const item of currentResult.items) {
+        const row = headers.map(h => {
+          if (h === 'paidAmount') return round2((item.payments || []).reduce((s, p) => s + (p.amount || 0), 0)).toFixed(2);
+          if (['totalNet', 'totalVat', 'grandTotal'].includes(h)) return Number(item[h] || 0).toFixed(2);
+          return item[h] ?? '';
+        });
+        lines.push(row.map(escapeCsvCell).join(','));
+      }
+      triggerDownload(`${currentSourceName}.transformed.csv`, lines.join('\r\n'), 'text/csv;charset=utf-8;');
+    });
+
+    document.getElementById('downloadIssuesBtn').addEventListener('click', () => {
+      const lines = ['type,rowNumber,key,reason'];
+      for (const r of currentResult.rejected) lines.push(['REJECTED', r.rowNumber, r.key, r.reason].map(escapeCsvCell).join(','));
+      for (const u of currentResult.unmatched) lines.push(['UNMATCHED', u.rowNumber, u.key, u.reason].map(escapeCsvCell).join(','));
+      triggerDownload(`${currentSourceName}.issues.csv`, lines.join('\r\n'), 'text/csv;charset=utf-8;');
+    });
+
+    renderEmpty();
+  </script>
+</body>
+</html>
