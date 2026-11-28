@@ -138,7 +138,8 @@ export const parseAndPrepareInvoiceImport = async (
     existingInvoices: Invoice[],
     customers: Customer[],
     vehicles: Vehicle[],
-    defaultVatRate = 20
+    defaultVatRate = 20,
+    markAllAsPaid = true
 ): Promise<InvoiceImportResult> => {
     const fileName = file.name.toLowerCase();
     const isJson = fileName.endsWith('.json');
@@ -240,7 +241,19 @@ export const parseAndPrepareInvoiceImport = async (
             const veh = resolveVehicleId(String(item.vehicleId || ''));
             if (!cust.matched || !veh.matched) unmatchedLinksCount++;
 
-            const status: Invoice['status'] = VALID_STATUSES.has(item.status) ? item.status : 'Sent';
+            const status: Invoice['status'] = markAllAsPaid
+                ? 'Paid'
+                : VALID_STATUSES.has(item.status)
+                  ? item.status
+                  : 'Sent';
+            const totalGross = Number(item.grandTotal ?? item.totalAmount ?? 0);
+            const payments: Payment[] = markAllAsPaid
+                ? totalGross > 0.005
+                    ? [{ amount: round2(totalGross), date: issueDate, method: 'Other', notes: 'Imported historical invoice (marked Paid)' }]
+                    : []
+                : Array.isArray(item.payments)
+                  ? item.payments
+                  : [];
             const normalized: Invoice = {
                 ...item,
                 id,
@@ -250,7 +263,7 @@ export const parseAndPrepareInvoiceImport = async (
                 dueDate: parseDateToIso(item.dueDate) || addDaysIso(issueDate, 30),
                 status,
                 lineItems: Array.isArray(item.lineItems) ? item.lineItems : [],
-                payments: Array.isArray(item.payments) ? item.payments : [],
+                payments,
             };
             batchIds.add(idKey);
             imported.push(normalized);
@@ -324,12 +337,15 @@ export const parseAndPrepareInvoiceImport = async (
             const veh = resolveVehicleId(row['vehicleId'] || '');
             if (!cust.matched || !veh.matched) unmatchedLinksCount++;
 
-            const status: Invoice['status'] = VALID_STATUSES.has(row['status'] as Invoice['status'])
-                ? (row['status'] as Invoice['status'])
-                : 'Sent';
+            const status: Invoice['status'] = markAllAsPaid
+                ? 'Paid'
+                : VALID_STATUSES.has(row['status'] as Invoice['status'])
+                  ? (row['status'] as Invoice['status'])
+                  : 'Sent';
 
-            const payments: Payment[] = paidAmount > 0.005
-                ? [{ amount: paidAmount, date: issueDate, method: 'Other', notes: 'Imported historical payment' }]
+            const effectivePaidAmount = markAllAsPaid ? round2(grandTotal) : paidAmount;
+            const payments: Payment[] = effectivePaidAmount > 0.005
+                ? [{ amount: effectivePaidAmount, date: issueDate, method: 'Other', notes: markAllAsPaid ? 'Imported historical invoice (marked Paid)' : 'Imported historical payment' }]
                 : [];
 
             batchIds.add(idKey);
@@ -346,7 +362,7 @@ export const parseAndPrepareInvoiceImport = async (
                     quantity: 1,
                     unitPrice: totalNet,
                     unitCost: 0,
-                    isLabor: false,
+                    isLabor: true,
                     vatRate: grandTotal === 0 ? 0 : defaultVatRate,
                 }],
                 payments,
@@ -377,11 +393,13 @@ export const parseAndPrepareInvoiceImport = async (
         const outstanding = Math.max(0, round2(outstandingRaw));
         const paidAmount = round2(Math.max(0, totalGross - outstanding));
 
-        let status: Invoice['status'] = 'Sent';
-        if (totalGross === 0 && !paidFlag) status = 'Draft';
-        else if (paidFlag || outstanding <= 0.005) status = 'Paid';
-        else if (paidAmount > 0.005) status = 'Part Paid';
-        else if (dueDate < todayIso) status = 'Overdue';
+        let status: Invoice['status'] = markAllAsPaid ? 'Paid' : 'Sent';
+        if (!markAllAsPaid) {
+            if (totalGross === 0 && !paidFlag) status = 'Draft';
+            else if (paidFlag || outstanding <= 0.005) status = 'Paid';
+            else if (paidAmount > 0.005) status = 'Part Paid';
+            else if (dueDate < todayIso) status = 'Overdue';
+        }
 
         const legacyCustomerCode = (row['Customer'] || '').trim();
         const customerName = (row['Customer Name'] || '').trim();
@@ -407,8 +425,9 @@ export const parseAndPrepareInvoiceImport = async (
         if (printedFlag) metaParts.push('Legacy Flag: Printed');
         if (row['Status']) metaParts.push(`Legacy Status: ${row['Status']}`);
 
-        const payments: Payment[] = paidAmount > 0.005
-            ? [{ amount: paidAmount, date: issueDate, method: 'Other', notes: 'Imported historical payment from legacy CSV' }]
+        const effectivePaidAmount = markAllAsPaid ? round2(totalGross) : paidAmount;
+        const payments: Payment[] = effectivePaidAmount > 0.005
+            ? [{ amount: effectivePaidAmount, date: issueDate, method: 'Other', notes: markAllAsPaid ? 'Imported historical invoice (marked Paid)' : 'Imported historical payment from legacy CSV' }]
             : [];
 
         batchIds.add(idKey);
@@ -425,7 +444,7 @@ export const parseAndPrepareInvoiceImport = async (
                 quantity: 1,
                 unitPrice: totalNet,
                 unitCost: 0,
-                isLabor: false,
+                isLabor: true,
                 vatRate: effectiveVatRate,
             }],
             payments,

@@ -148,6 +148,10 @@
               <input id="entityId" type="text" placeholder="e.g. ent_porsche" />
             </div>
           </div>
+          <label style="display:flex; align-items:center; gap:8px; margin-top:12px; cursor:pointer;">
+            <input id="markAllPaid" type="checkbox" checked />
+            <span>Mark all imported invoices as Paid</span>
+          </label>
         </div>
 
         <div id="customerOptions" class="hidden">
@@ -284,7 +288,7 @@
 
     // --- 1. INVOICES ---
     function transformInvoices(records, opts) {
-      const { vatRate, termsDays, entityId, idPrefix, backupJson } = opts;
+      const { vatRate, termsDays, entityId, idPrefix, backupJson, markAllPaid } = opts;
       const todayIso = new Date().toISOString().slice(0, 10);
       const { customersByKey, vehiclesByReg, vehiclesByVin } = buildLookupMaps(backupJson);
       const items = [], rejected = [], unmatched = [];
@@ -306,13 +310,15 @@
         const dueDate = addDaysIso(issueDate, termsDays);
         const paidFlag = ['1', 'true', 'yes'].includes(pick(row, ['Paid']).toLowerCase());
         const outstanding = Math.max(0, round2(outstandingRaw));
-        const paidAmount = round2(Math.max(0, totalGross - outstanding));
+        const paidAmount = markAllPaid ? round2(Math.max(0, totalGross)) : round2(Math.max(0, totalGross - outstanding));
 
-        let status = 'Sent';
-        if (totalGross === 0 && !paidFlag) status = 'Draft';
-        else if (paidFlag || outstanding <= 0.005) status = 'Paid';
-        else if (paidAmount > 0.005) status = 'Part Paid';
-        else if (dueDate < todayIso) status = 'Overdue';
+        let status = markAllPaid ? 'Paid' : 'Sent';
+        if (!markAllPaid) {
+          if (totalGross === 0 && !paidFlag) status = 'Draft';
+          else if (paidFlag || outstanding <= 0.005) status = 'Paid';
+          else if (paidAmount > 0.005) status = 'Part Paid';
+          else if (dueDate < todayIso) status = 'Overdue';
+        }
 
         const legacyCust = pick(row, ['Customer', 'Account Code', 'customerId']);
         const custName = pick(row, ['Customer Name', 'customerName']);
@@ -350,7 +356,7 @@
             quantity: 1,
             unitPrice: totalNet,
             unitCost: 0,
-            isLabor: false,
+            isLabor: true,
             vatRate: effectiveVatRate,
           }],
           payments: paidAmount > 0.005 ? [{ amount: paidAmount, date: issueDate, method: 'Other', notes: 'Imported historical payment' }] : [],
@@ -628,6 +634,7 @@
           termsDays: Number(document.getElementById('termsDays').value || 30),
           idPrefix: document.getElementById('idPrefix').value.trim(),
           entityId: document.getElementById('entityId').value.trim(),
+          markAllPaid: document.getElementById('markAllPaid').checked,
           backupJson: currentBackupJson,
         });
       } else if (activeTab === 'customers') {
@@ -741,7 +748,7 @@
       runTransform();
     });
 
-    ['vatRate', 'termsDays', 'idPrefix', 'entityId', 'defaultCustomerCategory', 'defaultVehicleColour'].forEach(id => {
+    ['vatRate', 'termsDays', 'idPrefix', 'entityId', 'markAllPaid', 'defaultCustomerCategory', 'defaultVehicleColour'].forEach(id => {
       document.getElementById(id).addEventListener('input', runTransform);
       document.getElementById(id).addEventListener('change', runTransform);
     });

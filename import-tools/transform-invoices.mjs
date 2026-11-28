@@ -165,6 +165,7 @@ export function transformInvoiceRows(records, options = {}) {
     idPrefix = '',
     todayIso = new Date().toISOString().slice(0, 10),
     backupJson = null,
+    markAllPaid = true,
   } = options;
 
   const { customersByKey, vehiclesByReg, vehiclesByVin } = buildLookupMaps(backupJson);
@@ -198,17 +199,19 @@ export function transformInvoiceRows(records, options = {}) {
     const onHoldFlag = row['On Hold'] === '1' || String(row['On Hold']).toLowerCase() === 'true';
     const printedFlag = row['Printed'] === '1' || String(row['Printed']).toLowerCase() === 'true';
     const outstanding = Math.max(0, round2(outstandingRaw));
-    const paidAmount = round2(Math.max(0, totalGross - outstanding));
+    const paidAmount = markAllPaid ? round2(Math.max(0, totalGross)) : round2(Math.max(0, totalGross - outstanding));
 
-    let status = 'Sent';
-    if (totalGross === 0 && !paidFlag) {
-      status = 'Draft';
-    } else if (paidFlag || outstanding <= 0.005) {
-      status = 'Paid';
-    } else if (paidAmount > 0.005) {
-      status = 'Part Paid';
-    } else if (dueDate < todayIso) {
-      status = 'Overdue';
+    let status = markAllPaid ? 'Paid' : 'Sent';
+    if (!markAllPaid) {
+      if (totalGross === 0 && !paidFlag) {
+        status = 'Draft';
+      } else if (paidFlag || outstanding <= 0.005) {
+        status = 'Paid';
+      } else if (paidAmount > 0.005) {
+        status = 'Part Paid';
+      } else if (dueDate < todayIso) {
+        status = 'Overdue';
+      }
     }
 
     const legacyCustomerCode = (row['Customer'] || '').trim();
@@ -253,7 +256,7 @@ export function transformInvoiceRows(records, options = {}) {
         quantity: 1,
         unitPrice: totalNet,
         unitCost: 0,
-        isLabor: false,
+        isLabor: true,
         vatRate: effectiveVatRate,
         totalNet,
         totalVat,
