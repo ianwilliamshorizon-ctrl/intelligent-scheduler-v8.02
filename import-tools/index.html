@@ -856,16 +856,25 @@
       btn.addEventListener('click', () => switchTab(btn.dataset.tab));
     });
 
+    async function readFileTextWithEncoding(file) {
+      const buffer = await file.arrayBuffer();
+      const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+      if (utf8Text.includes('\uFFFD')) {
+        return new TextDecoder('windows-1252').decode(buffer);
+      }
+      return utf8Text;
+    }
+
     wireDropzone('csvDropzone', 'csvFileInput', async file => {
       currentSourceName = file.name.replace(/\.csv$/i, '');
       document.getElementById('csvFileName').textContent = file.name;
-      currentRecords = parseCsv(await file.text()).records;
+      currentRecords = parseCsv(await readFileTextWithEncoding(file)).records;
       runTransform();
     });
 
     wireDropzone('backupDropzone', 'backupFileInput', async file => {
       document.getElementById('backupFileName').textContent = file.name;
-      currentBackupJson = JSON.parse(await file.text());
+      currentBackupJson = JSON.parse(await readFileTextWithEncoding(file));
       runTransform();
     });
 

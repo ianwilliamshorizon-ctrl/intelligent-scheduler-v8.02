@@ -156,7 +156,11 @@ export const parseAndPrepareInvoiceImport = async (
         };
     }
 
-    const text = await file.text();
+    const buffer = await file.arrayBuffer();
+    const utf8Text = new TextDecoder('utf-8', { fatal: false }).decode(buffer);
+    const text = utf8Text.includes('\uFFFD')
+        ? new TextDecoder('windows-1252').decode(buffer)
+        : utf8Text;
     const existingIds = new Set(existingInvoices.map((inv) => String(inv.id).trim().toUpperCase()));
     const batchIds = new Set<string>();
     const { customersByKey, vehiclesByReg, vehiclesByVin, vehiclesById } = buildLookupMaps(customers, vehicles);
