@@ -28,7 +28,8 @@ import {
 import { ManagementBackupTab } from './management/tabs/ManagementBackupTab';
 import { ManagementBookingScriptsTab } from './management/tabs/ManagementBookingScriptsTab';
 import { ManagementTrainingTab } from './management/tabs/ManagementTrainingTab';
-import { Award } from 'lucide-react';
+import { ManagementRecycleBinTab } from './management/tabs/ManagementRecycleBinTab';
+import { Award, ArchiveRestore } from 'lucide-react';
 
 // Utilities
 import { setItem } from '../core/db';
@@ -113,6 +114,7 @@ const ManagementModal: React.FC<ManagementModalProps> = ({
         { id: 'voiceSettings', label: 'AI & Voice Settings', icon: Volume2, render: () => <ManagementVoiceTab />, permission: 'canManageStaff' },
         { id: 'mailSettings', label: 'Mail Settings', icon: Mail, render: () => <ManagementMailSettingsTab onShowStatus={showStatus} />, permission: 'canManageEntities' },
         { id: 'backup', label: 'Backup & Restore', icon: Database, render: () => <ManagementBackupTab backupSchedule={backupSchedule} setBackupSchedule={setBackupSchedule} onManualBackup={onManualBackup} onCloudSnapshot={onCloudSnapshot} onRestoreFromSnapshot={onRestoreFromSnapshot} onShowStatus={showStatus} />, permission: 'canManageBackups' },
+        { id: 'recycleBin', label: 'Recycle Bin', icon: ArchiveRestore, render: () => <ManagementRecycleBinTab searchTerm={searchTerm} onShowStatus={showStatus} />, permission: 'canManageBackups' },
     ], [searchTerm, backupSchedule, onManualBackup, onRestoreFromSnapshot, setBackupSchedule, setCurrentView, onClose, onViewCustomer, onViewVehicle, onViewJob, onViewEstimate, onViewInvoice, onOpenPurchaseOrder]); // Added handlers to dependency array
 
     const filteredTabs = useMemo(() => {

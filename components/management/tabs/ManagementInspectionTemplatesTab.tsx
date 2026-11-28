@@ -25,15 +25,8 @@ export const ManagementInspectionTemplatesTab: React.FC<ManagementInspectionTemp
         (template.description || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleDelete = async (id: string) => {
-        if (window.confirm('Are you sure you want to delete this template?')) {
-            try {
-                await deleteItem(id);
-                if (onShowStatus) onShowStatus('Template deleted successfully', 'success');
-            } catch (error) {
-                if (onShowStatus) onShowStatus('Failed to delete template', 'error');
-            }
-        }
+    const handleDelete = (id: string) => {
+        deleteItem(id);
     };
 
     const handleClone = (template: InspectionTemplate) => {

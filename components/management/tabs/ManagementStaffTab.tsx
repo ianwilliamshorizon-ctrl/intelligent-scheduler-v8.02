@@ -6,6 +6,7 @@ import { PlusCircle, User, Mail, ShieldCheck, Edit3, Trash2, Users, ShieldAlert 
 import UserFormModal from '../../UserFormModal';
 import { useManagementTable } from '../hooks/useManagementTable';
 import { saveDocument, deleteDocument } from '../../../core/db/index';
+import { safeDeleteWithTrash, showUndoDeleteToast, TrashEntry } from '../../../core/db/trash';
 
 const isTechRole = (role?: string): boolean => {
     if (!role) return false;
@@ -31,7 +32,7 @@ interface ManagementStaffTabProps {
 }
 
 export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTerm, onShowStatus }) => {
-    const { users = [], setUsers, adminResetPassword } = useApp();
+    const { users = [], setUsers, adminResetPassword, setConfirmation, currentUser } = useApp();
     const { roles = [], businessEntities = [], engineers = [], setEngineers } = useData();
     
     const [localUsers, setLocalUsers] = useState<UserType[]>(Array.isArray(users) ? users : []);
@@ -85,39 +86,73 @@ export const ManagementStaffTab: React.FC<ManagementStaffTabProps> = ({ searchTe
         (user.role || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
-    const handleDeleteUser = async (u: UserType) => {
-        if (!window.confirm(`Remove ${u.name}? This will revoke their database access and remove them from all workshop schedules.`)) {
-            return;
-        }
+    const handleDeleteUser = (u: UserType) => {
+        setConfirmation({
+            isOpen: true,
+            type: 'warning',
+            title: 'Remove Staff Member',
+            message: `Remove ${u.name}? This will revoke their database access and remove them from workshop schedules. You can undo immediately or restore from the Recycle Bin.`,
+            confirmText: 'Remove',
+            cancelText: 'Cancel',
+            onConfirm: async () => {
+                const entries: TrashEntry[] = [];
+                const userEntry = await safeDeleteWithTrash({
+                    collectionName: 'brooks_users',
+                    docId: u.id,
+                    itemSnapshot: u,
+                    label: u.name,
+                    itemType: 'User',
+                    deletedBy: currentUser?.id,
+                });
+                if (userEntry) entries.push(userEntry);
+                setUsers(prev => (prev || []).filter(item => item.id !== u.id));
 
-        // 1. Delete user record
-        await deleteItem(u.id);
+                // Cascade delete from brooks_engineers if linked or matching engineer exists
+                if (setEngineers) {
+                    const targetEngId = u.engineerId;
+                    const uName = (u.name || '').trim().toLowerCase();
+                    const matchingEngs = (engineers || []).filter(e =>
+                        (targetEngId && e.id === targetEngId) ||
+                        (e.id === u.id) ||
+                        (e.id === `eng_${u.id}`) ||
+                        (e.name && uName && e.name.trim().toLowerCase() === uName)
+                    );
 
-        // 2. Cascade delete from brooks_engineers if linked or matching engineer exists
-        if (setEngineers) {
-            const targetEngId = u.engineerId;
-            const uName = (u.name || '').trim().toLowerCase();
-            
-            const matchingEngs = (engineers || []).filter(e => 
-                (targetEngId && e.id === targetEngId) ||
-                (e.id === u.id) ||
-                (e.id === `eng_${u.id}`) ||
-                (e.name && uName && e.name.trim().toLowerCase() === uName)
-            );
-
-            if (matchingEngs.length > 0) {
-                const idsToDelete = new Set(matchingEngs.map(e => e.id));
-                setEngineers(prev => (prev || []).filter(e => !idsToDelete.has(e.id)));
-                for (const eng of matchingEngs) {
-                    try {
-                        await deleteDocument('brooks_engineers', eng.id);
-                    } catch (err) {
-                        console.error('Failed to delete engineer document:', err);
+                    if (matchingEngs.length > 0) {
+                        const idsToDelete = new Set(matchingEngs.map(e => e.id));
+                        setEngineers(prev => (prev || []).filter(e => !idsToDelete.has(e.id)));
+                        for (const eng of matchingEngs) {
+                            try {
+                                const engEntry = await safeDeleteWithTrash({
+                                    collectionName: 'brooks_engineers',
+                                    docId: eng.id,
+                                    itemSnapshot: eng,
+                                    label: eng.name,
+                                    itemType: 'Engineer',
+                                    deletedBy: currentUser?.id,
+                                });
+                                if (engEntry) entries.push(engEntry);
+                            } catch (err) {
+                                console.error('Failed to delete engineer document:', err);
+                            }
+                        }
                     }
                 }
-            }
-        }
-        onShowStatus(`Removed ${u.name} and synced workshop labour pool.`, 'info');
+                onShowStatus(`Removed ${u.name} and synced workshop labour pool.`, 'info');
+                if (entries.length > 0) {
+                    showUndoDeleteToast(
+                        entries,
+                        (restored) => {
+                            const restoredUsers = restored.filter(r => !('specialization' in r) && 'role' in r);
+                            const restoredEngs = restored.filter(r => !('role' in r));
+                            if (restoredUsers.length > 0) setUsers(prev => [...restoredUsers, ...(prev || []).filter(p => p.id !== u.id)]);
+                            if (restoredEngs.length > 0 && setEngineers) setEngineers(prev => [...restoredEngs, ...(prev || [])]);
+                        },
+                        `Removed staff member: ${u.name}`
+                    );
+                }
+            },
+        });
     };
 
     const handleSave = async (updatedUser: UserType) => {

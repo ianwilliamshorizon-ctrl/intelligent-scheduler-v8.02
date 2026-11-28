@@ -181,9 +181,7 @@ export const ManagementDiagramsTab: React.FC<ManagementDiagramsTabProps> = ({ se
                                 <Edit size={16}/>
                             </button>
                             <button 
-                                onClick={() => {
-                                    if(window.confirm(`Delete the ${d.make} ${d.model} template?`)) deleteItem(d.id);
-                                }} 
+                                onClick={() => deleteItem(d.id)} 
                                 className="p-2.5 bg-white rounded-xl text-red-600 hover:bg-red-600 hover:text-white shadow-xl transition-all transform translate-y-4 group-hover:translate-y-0 delay-75"
                             >
                                 <Trash2 size={16}/>

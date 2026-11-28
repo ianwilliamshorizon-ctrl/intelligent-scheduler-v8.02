@@ -71,11 +71,9 @@ export const ManagementStorageLocationsTab: React.FC<ManagementStorageLocationsT
                                             <button onClick={() => { setSelectedLocation(loc); setIsModalOpen(true); }} className="text-indigo-600 hover:text-indigo-800 p-1 rounded hover:bg-indigo-50">
                                                 <Edit size={16} />
                                             </button>
-                                            <button onClick={() => {
-                                                if (window.confirm('Are you sure you want to delete this storage location?')) {
-                                                    deleteItem(loc.id);
-                                                }
-                                            }} className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50">
+                                            <button 
+                                                onClick={() => deleteItem(loc.id)} 
+                                                className="text-red-600 hover:text-red-800 p-1 rounded hover:bg-red-50">
                                                 <Trash2 size={16} />
                                             </button>
                                         </td>

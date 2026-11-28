@@ -137,9 +137,7 @@ export const ManagementSuppliersTab = ({ searchTerm = '', onShowStatus }: { sear
                                                     Edit
                                                 </button>
                                                 <button 
-                                                    onClick={() => {
-                                                        if(window.confirm(`Permanently remove ${s.name} from records?`)) deleteItem(s.id);
-                                                    }} 
+                                                    onClick={() => deleteItem(s.id)} 
                                                     className="font-black text-[10px] uppercase tracking-widest text-slate-300 hover:text-red-600 px-3 py-2 hover:bg-red-50 rounded-lg transition-all"
                                                 >
                                                     Delete

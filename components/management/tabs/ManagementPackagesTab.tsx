@@ -89,17 +89,7 @@ export const ManagementPackagesTab: React.FC<ManagementPackagesTabProps> = ({ se
     };
     
     const handleDelete = (pkg: ServicePackage) => {
-        setConfirmation({
-            isOpen: true,
-            title: 'Confirm Deletion',
-            message: `Are you sure you want to delete the package "${pkg.name}"? This action cannot be undone.`,
-            type: 'warning',
-            onConfirm: () => {
-                deleteItem(pkg.id);
-                onShowStatus(`Deleted "${pkg.name}" successfully.`, 'success');
-                setConfirmation({ isOpen: false, title: '', message: '' });
-            }
-        });
+        deleteItem(pkg.id);
     };
 
     const handleBulkUpdate = async () => {

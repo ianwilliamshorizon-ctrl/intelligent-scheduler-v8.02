@@ -133,9 +133,7 @@ export const ManagementBatteryChargersTab = ({ searchTerm = '', onShowStatus }: 
                                                         <Edit3 size={18} />
                                                     </button>
                                                     <button 
-                                                        onClick={() => {
-                                                            if(window.confirm(`Permanently remove ${charger.name}?`)) deleteItem(charger.id);
-                                                        }} 
+                                                        onClick={() => deleteItem(charger.id)} 
                                                         className="p-2.5 text-slate-200 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
                                                         title="Decommission"
                                                     >

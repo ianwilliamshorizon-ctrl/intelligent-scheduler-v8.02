@@ -4,7 +4,9 @@ import { useData } from '../../../core/state/DataContext';
 import { TaxRate } from '../../../types';
 import { PlusCircle, Edit, Trash2 } from 'lucide-react';
 import TaxCodeFormModal from '../../TaxCodeFormModal';
-import { saveDocument, deleteDocument } from '../../../core/db';
+import { saveDocument } from '../../../core/db';
+import { useApp } from '../../../core/state/AppContext';
+import { safeDeleteWithTrash, showUndoDeleteToast } from '../../../core/db/trash';
 
 interface ManagementTaxCodesTabProps {
     searchTerm: string;
@@ -13,6 +15,7 @@ interface ManagementTaxCodesTabProps {
 
 export const ManagementTaxCodesTab: React.FC<ManagementTaxCodesTabProps> = ({ searchTerm, onShowStatus }) => {
     const { taxRates, setTaxRates } = useData();
+    const { setConfirmation, currentUser } = useApp();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [selectedTaxRate, setSelectedTaxRate] = useState<TaxRate | null>(null);
 
@@ -43,16 +46,38 @@ export const ManagementTaxCodesTab: React.FC<ManagementTaxCodesTabProps> = ({ se
         }
     };
 
-    const handleDelete = async (taxRateId: string) => {
-        if (window.confirm('Are you sure you want to delete this tax code?')) {
-            try {
-                await deleteDocument('brooks_taxRates', taxRateId);
-                setTaxRates(prev => prev.filter(t => t.id !== taxRateId));
-                onShowStatus('Tax code deleted.', 'success');
-            } catch (error) {
-                onShowStatus('Failed to delete tax code.', 'error');
-            }
-        }
+    const handleDelete = (taxRateId: string) => {
+        const target = (taxRates || []).find(t => t.id === taxRateId);
+        const label = target ? `${target.code} (${target.name})` : taxRateId;
+        setConfirmation({
+            isOpen: true,
+            type: 'warning',
+            title: 'Delete Tax Code',
+            message: `Are you sure you want to delete tax code "${label}"? You can undo immediately or restore it later from the Recycle Bin.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            onConfirm: async () => {
+                try {
+                    const entry = await safeDeleteWithTrash({
+                        collectionName: 'brooks_taxRates',
+                        docId: taxRateId,
+                        itemSnapshot: target,
+                        label,
+                        itemType: 'Tax Code',
+                        deletedBy: currentUser?.id,
+                    });
+                    setTaxRates(prev => prev.filter(t => t.id !== taxRateId));
+                    onShowStatus('Tax code deleted.', 'success');
+                    if (entry) {
+                        showUndoDeleteToast([entry], (restored) => {
+                            setTaxRates(prev => [...restored, ...prev.filter(t => t.id !== taxRateId)]);
+                        });
+                    }
+                } catch (error) {
+                    onShowStatus('Failed to delete tax code.', 'error');
+                }
+            },
+        });
     };
 
     const filteredTaxRates = (taxRates || []).filter(tr => 
