@@ -176,6 +176,21 @@ const JobDetailsTab: React.FC<JobDetailsTabProps> = ({
 
     return (
         <div className="space-y-4 pb-10">
+             <TabSection title="Job Description" icon={Briefcase}>
+                {isReadOnly ? (
+                    <p className="text-sm text-gray-800 whitespace-pre-wrap">{editableJob.description || 'No description provided.'}</p>
+                ) : (
+                    <textarea
+                        name="description"
+                        value={editableJob.description || ''}
+                        onChange={onChange}
+                        rows={3}
+                        className="w-full p-2 border rounded bg-white text-sm focus:ring-1 focus:ring-indigo-500 outline-none resize-y"
+                        placeholder="Describe work required..."
+                    />
+                )}
+            </TabSection>
+
              <TabSection title="Key Details" icon={KeyRound}>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
                     <div className="flex items-center gap-2"><KeyRound size={14} className="text-gray-500"/><strong>Key #:</strong> 
